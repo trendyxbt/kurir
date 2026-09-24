@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kurir — kirim token tanpa BNB</title>
+<style>
+  :root { --fg:#111; --muted:#666; --line:#ddd; --ok:#0a7d35; --warn:#a15c00; --block:#b3261e; --bg:#fff; --card:#f7f7f5; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--fg); background:var(--bg); }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 28px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  section { border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; background:var(--card); }
+  h2 { font-size:15px; margin:0 0 12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  label { display:block; font-weight:600; margin:12px 0 4px; }
+  input { width:100%; padding:10px 12px; font:inherit; font-family: ui-monospace, Menlo, monospace; font-size:14px; border:1px solid #bbb; border-radius:8px; background:#fff; }
+  button { font:inherit; font-weight:600; padding:10px 16px; border-radius:8px; border:1px solid #111; background:#111; color:#fff; cursor:pointer; }
+  button.secondary { background:#fff; color:#111; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+  .mono { font-family: ui-monospace, Menlo, monospace; font-size:13px; word-break: break-all; }
+  .muted { color:var(--muted); font-size:14px; }
+  .link { background:none; border:none; color:#1a5fb4; padding:0; font-weight:500; text-decoration:underline; font-size:14px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td, th { padding:6px 4px; border-bottom:1px solid var(--line); text-align:left; }
+  td.num, th.num { text-align:right; font-variant-numeric: tabular-nums; font-family: ui-monospace, Menlo, monospace; }
+  .delta-pos { color: var(--ok); } .delta-neg { color: var(--block); }
+  .verdict { border-radius:8px; padding:12px 14px; margin-top:12px; border:2px solid; }
+  .verdict.ok { border-color:var(--ok); } .verdict.warn { border-color:var(--warn); } .verdict.block { border-color:var(--block); }
+  .verdict strong { display:block; margin-bottom:4px; }
+  .verdict.ok strong { color:var(--ok); } .verdict.warn strong { color:var(--warn); } .verdict.block strong { color:var(--block); }
+  .verdict ul { margin:8px 0 0; padding-left:18px; font-size:13px; color:var(--muted); }
+  #log { font-size:14px; }
+  #log div { padding:2px 0; }
+  .err { color: var(--block); }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Kurir</h1>
+  <p class="sub">Kirim token tanpa punya BNB. Kamu cuma tanda tangan, relayer yang bayar gas.</p>
+
+  <section>
+    <h2>1 · Wallet</h2>
+    <div class="row" style="margin-top:0">
+      <button id="connect">Connect wallet</button>
+      <span id="account" class="mono muted"></span>
+    </div>
+    <p id="cfgInfo" class="muted" style="margin:8px 0 0"></p>
+  </section>
+
+  <section>
+    <h2>Saldo</h2>
+    <table>
+      <thead><tr><th></th><th class="num">Sebelum</th><th class="num">Sekarang</th></tr></thead>
+      <tbody id="balances"><tr><td colspan="3" class="muted">Connect wallet dulu.</td></tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>2 · Kirim</h2>
+    <form id="sendForm">
+      <label for="to">Alamat penerima</label>
+      <input id="to" placeholder="0x…" autocomplete="off" spellcheck="false" required />
+      <div class="row" style="margin-top:6px">
+        <button type="button" id="demoLookalike" class="link hidden">Demo: isi alamat yang mirip alamat lama</button>
+      </div>
+      <label for="amount">Jumlah (<span id="sym">tUSD</span>)</label>
+      <input id="amount" inputmode="decimal" placeholder="10" autocomplete="off" required />
+      <p class="muted" id="feeLine" style="margin:6px 0 0"></p>
+      <div class="row">
+        <button type="submit" id="checkBtn" disabled>Cek dulu</button>
+      </div>
+    </form>
+
+    <div id="verdict" class="hidden"></div>
+    <div class="row hidden" id="confirmRow">
+      <button id="signBtn">Tanda tangan &amp; kirim</button>
+      <button id="cancelBtn" class="secondary">Batal</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>3 · Status</h2>
+    <div id="log" class="muted">Belum ada transaksi.</div>
+  </section>
+</main>
+
+<script type="module">
+import {
+  createWalletClient, createPublicClient, custom, parseUnits, formatUnits,
+  parseSignature, getAddress, isAddress, parseAbi,
+} from "https://esm.sh/viem@2.56.8";
+import { bscTestnet } from "https://esm.sh/viem@2.56.8/chains";
+
+// Backend URL: ?api=http://host:port overrides the default.
+const API = new URLSearchParams(location.search).get("api") || "http://localhost:8787";
+
+const erc20 = parseAbi([
+  "function balanceOf(address) view returns (uint256)",
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function nonces(address) view returns (uint256)",
+]);
+const kurirAbi = parseAbi(["function nonces(address) view returns (uint256)"]);
+
+const SEND_INTENT_TYPES = {
+  SendIntent: [
+    { name: "token", type: "address" },
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "fee", type: "uint256" },
+    { name: "relayer", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+};
+const PERMIT_TYPES = {
+  Permit: [
+    { name: "owner", type: "address" },
+    { name: "spender", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+};
+
+const $ = (id) => document.getElementById(id);
+const state = { cfg: null, account: null, wallet: null, pub: null, symbol: "tUSD", pending: null, before: null, lastTo: null };
+
+// ---------- helpers ----------
+
+const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+const fmt = (v, d = 18) => Number(formatUnits(v, d)).toLocaleString("id-ID", { maximumFractionDigits: 4 });
+
+function log(html, cls = "") {
+  const box = $("log");
+  if (box.classList.contains("muted")) { box.innerHTML = ""; box.classList.remove("muted"); }
+  const d = document.createElement("div");
+  d.className = cls;
+  d.innerHTML = html;
+  box.appendChild(d);
+}
+
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function historyKey() { return `kurir:history:${state.account.toLowerCase()}`; }
+function readHistory() {
+  try { return JSON.parse(localStorage.getItem(historyKey()) || "[]"); } catch { return []; }
+}
+function pushHistory(addr) {
+  try {
+    const h = readHistory().filter((a) => a.toLowerCase() !== addr.toLowerCase());
+    h.unshift(addr);
+    localStorage.setItem(historyKey(), JSON.stringify(h.slice(0, 50)));
+  } catch {}
+  refreshDemoLink();
+}
+
+async function api(path, body) {
+  const res = await fetch(API + path, body ? {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  } : undefined);
+  const json = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, json };
+}
+
+// ---------- balances ----------
+
+async function readBalances() {
+  const { pub, cfg, account } = state;
+  const bal = (who) => pub.readContract({ address: cfg.token, abi: erc20, functionName: "balanceOf", args: [who] });
+  const rows = [
+    ["Kamu · " + state.symbol, bal(account)],
+    ["Kamu · BNB", pub.getBalance({ address: account })],
+    ["Relayer bot · " + state.symbol + " (fee)", bal(cfg.relayer)],
+    ["Kontrak Kurir · " + state.symbol, bal(cfg.kurirRelayer)],
+  ];
+  if (state.lastTo) rows.push(["Penerima " + short(state.lastTo) + " · " + state.symbol, bal(state.lastTo)]);
+  const values = await Promise.all(rows.map((r) => r[1]));
+  return rows.map((r, i) => ({ label: r[0], value: values[i] }));
+}
+
+async function renderBalances() {
+  const now = await readBalances();
+  const before = state.before;
+  $("balances").innerHTML = now.map((r) => {
+    const b = before?.find((x) => x.label === r.label);
+    const delta = b ? r.value - b.value : 0n;
+    const cls = delta > 0n ? "delta-pos" : delta < 0n ? "delta-neg" : "";
+    return `<tr><td>${escapeHtml(r.label)}</td>
+      <td class="num">${b ? fmt(b.value) : "—"}</td>
+      <td class="num ${cls}">${fmt(r.value)}${delta !== 0n ? ` (${delta > 0n ? "+" : ""}${fmt(delta)})` : ""}</td></tr>`;
+  }).join("");
+}
+
+// ---------- connect ----------
+
+$("connect").onclick = async () => {
+  try {
+    if (!window.ethereum) throw new Error("Nggak ada wallet terdeteksi. Install MetaMask dulu.");
+    const cfgRes = await api("/config");
+    if (!cfgRes.ok) throw new Error("Backend nggak bisa dihubungi di " + API);
+    state.cfg = cfgRes.json;
+
+    const chain = state.cfg.chainId === bscTestnet.id ? bscTestnet
+      : { ...bscTestnet, id: state.cfg.chainId, name: "Local (chain " + state.cfg.chainId + ")" };
+    state.wallet = createWalletClient({ chain, transport: custom(window.ethereum) });
+    state.pub = createPublicClient({ chain, transport: custom(window.ethereum) });
+
+    const [addr] = await state.wallet.requestAddresses();
+    state.account = getAddress(addr);
+
+    if ((await state.wallet.getChainId()) !== chain.id) {
+      try { await state.wallet.switchChain({ id: chain.id }); }
+      catch { await state.wallet.addChain({ chain }); await state.wallet.switchChain({ id: chain.id }); }
+    }
+
+    state.symbol = await state.pub.readContract({ address: state.cfg.token, abi: erc20, functionName: "symbol" });
+    $("sym").textContent = state.symbol;
+    $("account").textContent = state.account;
+    $("connect").textContent = "Terhubung";
+    $("connect").disabled = true;
+    $("checkBtn").disabled = false;
+    $("cfgInfo").innerHTML = `Relayer: <span class="mono">${short(state.cfg.relayer)}</span> · Kontrak: <span class="mono">${short(state.cfg.kurirRelayer)}</span>`;
+    $("feeLine").textContent = `Fee relayer: ${state.cfg.feeFormatted} ${state.symbol} (dipotong dari token yang sama, bukan BNB).`;
+    refreshDemoLink();
+    await renderBalances();
+  } catch (e) {
+    log(escapeHtml(e.shortMessage || e.message), "err");
+  }
+};
+
+// ---------- demo helper for the poisoning moment ----------
+
+function refreshDemoLink() {
+  $("demoLookalike").classList.toggle("hidden", !state.account || readHistory().length === 0);
+}
+$("demoLookalike").onclick = () => {
+  const orig = readHistory()[0].toLowerCase().slice(2);
+  // Keep first 4 and last 4 hex chars, scramble 6 in the middle — classic address poisoning.
+  const flip = (c) => "0123456789abcdef"[(parseInt(c, 16) + 7) % 16];
+  const mid = orig.slice(4, 36).split("").map((c, i) => (i >= 13 && i < 19 ? flip(c) : c)).join("");
+  $("to").value = "0x" + orig.slice(0, 4) + mid + orig.slice(36);
+};
+
+// ---------- step 1: guard ----------
+
+$("sendForm").onsubmit = async (ev) => {
+  ev.preventDefault();
+  resetVerdict();
+  const toRaw = $("to").value.trim();
+  if (!isAddress(toRaw, { strict: false })) return showVerdict({ verdict: "block", explanation: "Format alamatnya nggak valid, cek lagi ya.", findings: [] });
+  let amount;
+  try { amount = parseUnits($("amount").value.trim().replace(",", "."), state.cfg.tokenDecimals); }
+  catch { return showVerdict({ verdict: "block", explanation: "Jumlahnya nggak valid.", findings: [] }); }
+  if (amount <= 0n) return showVerdict({ verdict: "block", explanation: "Jumlahnya harus lebih dari 0.", findings: [] });
+
+  const to = getAddress(toRaw.toLowerCase());
+  $("checkBtn").disabled = true;
+  $("checkBtn").textContent = "Ngecek…";
+  try {
+    const { ok, json } = await api("/guard", {
+      token: state.cfg.token, from: state.account, to, amount: amount.toString(), history: readHistory(),
+    });
+    if (!ok) throw new Error(json.message || "Guard error");
+    state.pending = { to, amount };
+    showVerdict(json);
+    if (json.verdict === "ok") await signAndRelay();
+  } catch (e) {
+    log(escapeHtml(e.message), "err");
+  } finally {
+    $("checkBtn").disabled = false;
+    $("checkBtn").textContent = "Cek dulu";
+  }
+};
+
+function resetVerdict() {
+  $("verdict").className = "hidden";
+  $("confirmRow").classList.add("hidden");
+  state.pending = null;
+}
+
+function showVerdict(g) {
+  const title = { ok: "Aman, lanjut.", warn: "Hmm, cek dulu.", block: "Diblok." }[g.verdict];
+  const v = $("verdict");
+  v.className = "verdict " + g.verdict;
+  v.innerHTML = `<strong>${title}</strong>${g.explanation ? escapeHtml(g.explanation) : ""}` +
+    (g.findings?.length ? `<ul>${g.findings.map((f) => `<li>${escapeHtml(f.code)}</li>`).join("")}</ul>` : "");
+  $("confirmRow").classList.toggle("hidden", g.verdict !== "warn");
+  $("signBtn").textContent = "Lanjut aja";
+}
+
+$("cancelBtn").onclick = resetVerdict;
+$("signBtn").onclick = () => signAndRelay();
+
+// ---------- step 2: sign intent + permit, relay ----------
+
+async function signAndRelay() {
+  const { cfg, account, wallet, pub } = state;
+  const { to, amount } = state.pending;
+  $("confirmRow").classList.add("hidden");
+  const fee = BigInt(cfg.fee);
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 10 * 60);
+
+  try {
+    state.lastTo = to;
+    state.before = await readBalances();
+
+    const [intentNonce, permitNonce, tokenName] = await Promise.all([
+      pub.readContract({ address: cfg.kurirRelayer, abi: kurirAbi, functionName: "nonces", args: [account] }),
+      pub.readContract({ address: cfg.token, abi: erc20, functionName: "nonces", args: [account] }),
+      pub.readContract({ address: cfg.token, abi: erc20, functionName: "name" }),
+    ]);
+
+    const intent = { token: cfg.token, from: account, to, amount, fee, relayer: cfg.relayer, nonce: intentNonce, deadline };
+
+    log("1/2 · Tanda tangan transaksi (gratis, tanpa gas)…");
+    const signature = await wallet.signTypedData({
+      account,
+      domain: { name: "Kurir", version: "1", chainId: cfg.chainId, verifyingContract: cfg.kurirRelayer },
+      types: SEND_INTENT_TYPES, primaryType: "SendIntent", message: intent,
+    });
+
+    log(`2/2 · Tanda tangan izin token (persis ${fmt(amount + fee)} ${state.symbol}, nggak lebih)…`);
+    const permitSig = await wallet.signTypedData({
+      account,
+      domain: { name: tokenName, version: "1", chainId: cfg.chainId, verifyingContract: cfg.token },
+      types: PERMIT_TYPES, primaryType: "Permit",
+      message: { owner: account, spender: cfg.kurirRelayer, value: amount + fee, nonce: permitNonce, deadline },
+    });
+    const { r, s, v, yParity } = parseSignature(permitSig);
+
+    log("Relayer lagi submit &amp; bayar gas…");
+    const str = (o) => Object.fromEntries(Object.entries(o).map(([k, x]) => [k, typeof x === "bigint" ? x.toString() : x]));
+    const { ok, json } = await api("/relay", {
+      intent: str(intent),
+      signature,
+      permit: { value: (amount + fee).toString(), deadline: deadline.toString(), v: Number(v ?? BigInt(yParity + 27)), r, s },
+    });
+
+    if (!ok) {
+      if (json.guard) showVerdict(json.guard);
+      throw new Error(json.message || json.guard?.explanation || json.error || "Relay gagal");
+    }
+    pushHistory(to);
+    log(`${json.status === "success" ? "✓ Terkirim" : "✗ Revert"} · <a href="${escapeHtml(json.explorerUrl)}" target="_blank" rel="noopener">${short(json.txHash)} di BscScan</a> · gas ${Number(json.gasUsed).toLocaleString("id-ID")} (dibayar relayer)`,
+      json.status === "success" ? "" : "err");
+    $("to").value = ""; $("amount").value = "";
+    $("verdict").className = "hidden";
+    await renderBalances();
+  } catch (e) {
+    log(escapeHtml(e.shortMessage || e.message), "err");
+  }
+}
+</script>
+</body>
+</html>
