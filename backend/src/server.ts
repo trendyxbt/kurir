@@ -114,6 +114,17 @@ app.post("/relay", async (req, res) => {
       .json({ error: "FeeTooLow", message: `Fee minimal ${formatUnits(relayerFee, TOKEN_DECIMALS)} token.` });
   }
 
+  // Deterministic rules on the intent's own numbers.
+  if (intent.amount === 0n) {
+    return void res.status(400).json({ error: "ZeroAmount", message: "Jumlah kirim harus lebih dari 0." });
+  }
+  if (intent.fee > intent.amount) {
+    return void res.status(422).json({
+      error: "FeeExceedsAmount",
+      message: "Fee-nya lebih gede dari jumlah yang dikirim. Naikin jumlahnya dulu ya.",
+    });
+  }
+
   // Deterministic rule: the permit must approve exactly what this send needs — no open-ended approvals.
   if (permit && permit.value > intent.amount + intent.fee) {
     return void res.status(422).json({

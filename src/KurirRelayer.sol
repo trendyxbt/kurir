@@ -51,31 +51,46 @@ contract KurirRelayer is EIP712, Nonces {
         uint256 nonce
     );
 
+    event NonceInvalidated(address indexed owner, uint256 nonce);
+
     /// @dev The intent names one relayer; anyone else copying it from the mempool is rejected.
     error NotDesignatedRelayer(address expected, address actual);
     error IntentExpired(uint256 deadline);
     /// @dev Zero address, the token contract itself, or this contract.
     error InvalidRecipient(address to);
     error InvalidSignature();
+    error ZeroAmount();
 
     constructor() EIP712("Kurir", "1") {}
 
     /// @notice Relay an intent whose token allowance to this contract already exists.
     function relay(SendIntent calldata intent, bytes calldata signature) external {
-        _relay(intent, signature);
+        _validateAndConsume(intent, signature);
+        _execute(intent);
     }
 
     /// @notice Relay an intent, first applying the user's EIP-2612 permit.
-    /// @dev The permit call is wrapped in try/catch: if someone front-runs the permit
-    ///      itself, the allowance is already in place and the relay still succeeds.
-    ///      If the permit was genuinely invalid, transferFrom fails below.
+    /// @dev The intent is fully validated and its nonce consumed *before* the external
+    ///      permit call, so no external call precedes a check. The permit call is wrapped
+    ///      in try/catch: if someone front-runs the permit itself, the allowance is already
+    ///      in place and the relay still succeeds. If the permit was genuinely invalid,
+    ///      transferFrom fails below and the whole call reverts.
     function relayWithPermit(SendIntent calldata intent, bytes calldata signature, PermitData calldata permit)
         external
     {
+        _validateAndConsume(intent, signature);
         try IERC20Permit(intent.token).permit(
             intent.from, address(this), permit.value, permit.deadline, permit.v, permit.r, permit.s
         ) {} catch {}
-        _relay(intent, signature);
+        _execute(intent);
+    }
+
+    /// @notice Cancel your next signed-but-unsent intent by burning its nonce.
+    /// @dev Needs gas (the caller is the user). Gasless alternative: have any intent with
+    ///      the same nonce relayed first, or simply let the deadline pass.
+    function invalidateNonce() external returns (uint256 burned) {
+        burned = _useNonce(msg.sender);
+        emit NonceInvalidated(msg.sender, burned);
     }
 
     function hashIntent(SendIntent calldata intent) public view returns (bytes32) {
@@ -100,22 +115,28 @@ contract KurirRelayer is EIP712, Nonces {
         return _domainSeparatorV4();
     }
 
-    function _relay(SendIntent calldata intent, bytes calldata signature) internal {
+    /// @dev Checks, then the only state write (nonce) and the event. No external calls except the
+    ///      signature check, which is a staticcall for ERC-1271 wallets.
+    function _validateAndConsume(SendIntent calldata intent, bytes calldata signature) internal {
         if (msg.sender != intent.relayer) revert NotDesignatedRelayer(intent.relayer, msg.sender);
         if (block.timestamp > intent.deadline) revert IntentExpired(intent.deadline);
         if (intent.to == address(0) || intent.to == intent.token || intent.to == address(this)) {
             revert InvalidRecipient(intent.to);
         }
+        if (intent.amount == 0) revert ZeroAmount();
         if (!SignatureChecker.isValidSignatureNow(intent.from, hashIntent(intent), signature)) {
             revert InvalidSignature();
         }
-        // Reverts with InvalidAccountNonce on replay or out-of-order nonce.
+        // Reverts with InvalidAccountNonce on replay, out-of-order nonce, or a cancelled intent.
         _useCheckedNonce(intent.from, intent.nonce);
+        // Emitted before any external call (permit/transfers) so re-entrancy can't reorder logs.
+        emit Relayed(intent.from, intent.to, intent.token, intent.amount, intent.fee, msg.sender, intent.nonce);
+    }
 
+    /// @dev Interactions only. If either transfer fails the whole call reverts, including the event.
+    function _execute(SendIntent calldata intent) internal {
         IERC20 token = IERC20(intent.token);
         token.safeTransferFrom(intent.from, intent.to, intent.amount);
         if (intent.fee > 0) token.safeTransferFrom(intent.from, msg.sender, intent.fee);
-
-        emit Relayed(intent.from, intent.to, intent.token, intent.amount, intent.fee, msg.sender, intent.nonce);
     }
 }

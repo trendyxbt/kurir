@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {Nonces} from "@openzeppelin/contracts/utils/Nonces.sol";
+import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {MockStable} from "../src/MockStable.sol";
 import {KurirRelayer} from "../src/KurirRelayer.sol";
 
@@ -166,6 +167,34 @@ contract KurirRelayerTest is Test {
         kurir.relay(i, sig);
     }
 
+    function test_UserCanCancelSignedIntent() public {
+        KurirRelayer.SendIntent memory i = _intent(0);
+        bytes memory sig = _signIntent(i, userKey);
+        KurirRelayer.PermitData memory p = _signPermit(AMOUNT + FEE);
+
+        vm.expectEmit(true, false, false, true, address(kurir));
+        emit KurirRelayer.NonceInvalidated(user, 0);
+        vm.prank(user);
+        assertEq(kurir.invalidateNonce(), 0);
+        assertEq(kurir.nonces(user), 1);
+
+        vm.prank(relayerBot);
+        vm.expectRevert(abi.encodeWithSelector(Nonces.InvalidAccountNonce.selector, user, 1));
+        kurir.relayWithPermit(i, sig, p);
+        assertEq(token.balanceOf(recipient), 0);
+    }
+
+    function test_Revert_ZeroAmount() public {
+        KurirRelayer.SendIntent memory i = _intent(0);
+        i.amount = 0;
+        bytes memory sig = _signIntent(i, userKey);
+        KurirRelayer.PermitData memory p = _signPermit(FEE);
+
+        vm.prank(relayerBot);
+        vm.expectRevert(KurirRelayer.ZeroAmount.selector);
+        kurir.relayWithPermit(i, sig, p);
+    }
+
     function test_Revert_TamperedAmount() public {
         KurirRelayer.SendIntent memory i = _intent(0);
         bytes memory sig = _signIntent(i, userKey);
@@ -250,13 +279,14 @@ contract KurirRelayerTest is Test {
         KurirRelayer.PermitData memory p = _signPermit(AMOUNT);
 
         vm.prank(relayerBot);
-        vm.expectRevert(); // ERC20InsufficientAllowance on the fee transfer
+        // Permit covers the amount but not the fee → fee transfer finds 0 allowance left.
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, address(kurir), 0, FEE));
         kurir.relayWithPermit(i, sig, p);
         assertEq(token.balanceOf(recipient), 0, "atomic: nothing moved");
     }
 
     function testFuzz_NeverHoldsFunds(uint96 amount, uint96 fee) public {
-        vm.assume(uint256(amount) + fee <= 1_000e18);
+        vm.assume(amount > 0 && uint256(amount) + fee <= 1_000e18);
         KurirRelayer.SendIntent memory i = _intent(0);
         i.amount = amount;
         i.fee = fee;

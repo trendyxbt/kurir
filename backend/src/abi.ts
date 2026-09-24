@@ -16,6 +16,7 @@ export const kurirRelayerAbi = parseAbi([
   "error IntentExpired(uint256 deadline)",
   "error InvalidRecipient(address to)",
   "error InvalidSignature()",
+  "error ZeroAmount()",
   "error InvalidAccountNonce(address account, uint256 currentNonce)",
   "error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)",
   "error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed)",

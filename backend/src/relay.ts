@@ -37,6 +37,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   IntentExpired: "Tanda tangannya udah kedaluwarsa. Coba kirim ulang ya.",
   InvalidRecipient: "Alamat tujuannya nggak valid (alamat nol, kontrak token, atau kontrak Kurir).",
   InvalidSignature: "Tanda tangannya nggak cocok sama isi transaksi — mungkin datanya berubah. Coba tanda tangan ulang.",
+  ZeroAmount: "Jumlah kirim harus lebih dari 0.",
   InvalidAccountNonce: "Transaksi ini udah pernah diproses atau urutannya nggak pas. Refresh lalu coba lagi.",
   ERC20InsufficientBalance: "Saldo token kamu nggak cukup buat nominal + fee.",
   ERC20InsufficientAllowance: "Izin (permit) token kurang atau nggak valid. Coba tanda tangan ulang.",

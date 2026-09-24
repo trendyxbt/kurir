@@ -151,7 +151,8 @@ export async function runGuard(input: GuardInput): Promise<GuardResult> {
 }
 
 async function readPastSends(from: Address): Promise<PastSend[]> {
-  const latest = await publicClient.getBlockNumber();
+  // cacheTime 0: viem otherwise caches the block number (~4s) and a send relayed moments ago would be missed.
+  const latest = await publicClient.getBlockNumber({ cacheTime: 0 });
   const fromBlock = latest > env.LOG_LOOKBACK_BLOCKS ? latest - env.LOG_LOOKBACK_BLOCKS : 0n;
   const logs = await publicClient.getContractEvents({
     address: env.KURIR_RELAYER_ADDRESS,

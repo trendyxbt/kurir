@@ -226,7 +226,7 @@ $("connect").onclick = async () => {
     $("connect").disabled = true;
     $("checkBtn").disabled = false;
     $("cfgInfo").innerHTML = `Relayer: <span class="mono">${short(state.cfg.relayer)}</span> · Kontrak: <span class="mono">${short(state.cfg.kurirRelayer)}</span>`;
-    $("feeLine").textContent = `Fee relayer: ${state.cfg.feeFormatted} ${state.symbol} (dipotong dari token yang sama, bukan BNB).`;
+    $("feeLine").textContent = `Fee relayer: ${state.cfg.feeFormatted} ${state.symbol} (dipotong dari token yang sama, bukan BNB). Minimal kirim ${state.cfg.feeFormatted} ${state.symbol}.`;
     refreshDemoLink();
     await renderBalances();
   } catch (e) {
@@ -258,6 +258,10 @@ $("sendForm").onsubmit = async (ev) => {
   try { amount = parseUnits($("amount").value.trim().replace(",", "."), state.cfg.tokenDecimals); }
   catch { return showVerdict({ verdict: "block", explanation: "Jumlahnya nggak valid.", findings: [] }); }
   if (amount <= 0n) return showVerdict({ verdict: "block", explanation: "Jumlahnya harus lebih dari 0.", findings: [] });
+  if (BigInt(state.cfg.fee) > amount) {
+    return showVerdict({ verdict: "block", findings: [],
+      explanation: `Fee relayer (${state.cfg.feeFormatted} ${state.symbol}) lebih gede dari jumlah kirimnya. Minimal kirim ${state.cfg.feeFormatted} ${state.symbol}.` });
+  }
 
   const to = getAddress(toRaw.toLowerCase());
   $("checkBtn").disabled = true;

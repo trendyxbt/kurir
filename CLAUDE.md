@@ -58,8 +58,8 @@ kurir/
 
 ### Status (2026-09-25)
 
-- **Contracts: done.** `forge test -vv` → 16/16 pass (incl. fuzz: relayer contract never holds funds).
-- **Backend: done.** Typechecks clean. `scripts/e2e-local.ts` passes 15/15 on local anvil (chain id 97).
+- **Contracts: done.** `forge test` → 33/33 pass (16 dev + 13 QA incl. fuzz, reentrancy, all-fields tamper). Day 1 QA findings F9/G1/G2/S1 fixed — see `qa/day1-acceptance-criteria.md`.
+- **Backend: done.** Typechecks clean. `scripts/e2e-local.ts` passes 17/17 on local anvil (chain id 97).
 - **Frontend: done.** Both demo moments verified through the UI on local anvil.
 - **Not yet done:** BSC testnet deploy, OpenAI explanations (no key set — templates in use), demo recording, deck.
 

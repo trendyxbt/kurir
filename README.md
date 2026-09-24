@@ -29,7 +29,7 @@ anvil --chain-id 97                                  # chain id 97 so the backen
 DEMO_WALLET=<0-BNB address> forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast --private-key <anvil key #0>
 # backend/.env: RPC_URL=http://127.0.0.1:8545, RELAYER_PRIVATE_KEY=<anvil key #1>, addresses from the deploy output
 cd backend && npm start
-USERKEY=<demo wallet key> npx tsx scripts/e2e-local.ts   # 15 checks: gasless send, replay, tamper, excess permit, guard rules
+USERKEY=<demo wallet key> npx tsx scripts/e2e-local.ts   # 17 checks: gasless send, replay, tamper, excess permit, zero amount, fee > amount, guard rules
 ```
 
 ### BSC testnet
@@ -77,6 +77,8 @@ Send it as `{ value, deadline, v, r, s }`.
 |---|---|---|
 | Wrong relayer, expired, tampered field, wrong signer, replay | contract | revert (`NotDesignatedRelayer`, `IntentExpired`, `InvalidSignature`, `InvalidAccountNonce`) |
 | `to` = zero / token contract / KurirRelayer | contract **and** guard | revert `InvalidRecipient` / guard `block` |
+| `amount == 0` | contract **and** `/relay` | revert `ZeroAmount` / rejected |
+| `fee > amount` | frontend **and** `/relay` (contract honours the signature by design) | rejected before signing |
 | `to` on scam list | guard | `block` |
 | Permit value > amount + fee (open-ended approval) | backend `/relay` | rejected |
 | Lookalike of a past recipient or of your own address | guard | `warn` |
@@ -85,6 +87,12 @@ Send it as `{ value, deadline, v, r, s }`.
 
 Only `warn` explanations may use an LLM (OpenAI, if `OPENAI_API_KEY` is set); otherwise fixed
 Indonesian templates are used. The LLM only writes the sentence — it never sets the verdict.
+
+## Cancelling a signed intent
+
+Call `KurirRelayer.invalidateNonce()` from the user's wallet. It burns the next nonce, so any intent
+signed with it reverts `InvalidAccountNonce`. This one call needs gas. Without BNB, a signed intent
+simply expires at its `deadline` (10 minutes in the frontend).
 
 ## Before any real deployment
 

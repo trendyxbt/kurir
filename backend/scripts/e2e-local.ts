@@ -108,6 +108,14 @@ const toToken = await buildSigned(cfg.token, amount);
 const r5 = await post("/relay", toToken);
 check("relay: send to token contract blocked server-side", r5.status === 422 && r5.json.error === "GuardBlocked", r5.json.error);
 
+const tiny = await buildSigned(recipient, parseUnits("0.1", 18));
+const r6 = await post("/relay", tiny);
+check("relay: fee > amount rejected (FeeExceedsAmount)", r6.status === 422 && r6.json.error === "FeeExceedsAmount", r6.json.error);
+
+const zero = await buildSigned(recipient, 0n);
+const r7 = await post("/relay", zero);
+check("relay: zero amount rejected (ZeroAmount)", r7.status === 400 && r7.json.error === "ZeroAmount", r7.json.error);
+
 // --- Demo moment 2: poisoned address ---
 const h = recipient.slice(2).toLowerCase();
 const lookalike = getAddress("0x" + h.slice(0, 4) + "ffffff" + h.slice(10));
