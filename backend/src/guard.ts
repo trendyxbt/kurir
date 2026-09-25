@@ -165,20 +165,46 @@ async function readPastSends(from: Address): Promise<PastSend[]> {
     });
 
   // Full history since deployment when the deploy block is known (a 5,000-block window is only
-  // ~37 min at BSC testnet's 0.45 s blocks). If the RPC refuses that range as the chain grows,
-  // fall back to the recent window instead of losing history entirely.
-  let logs;
-  if (env.KURIR_DEPLOY_BLOCK !== undefined && env.KURIR_DEPLOY_BLOCK < window) {
+  // ~37 min at BSC testnet's 0.45 s blocks). Public RPCs cap each getLogs range (publicnode:
+  // 50,000 blocks), so query in chunks, a few at a time. If any chunk fails, fall back to the
+  // recent window instead of losing history entirely.
+  const deploy = env.KURIR_DEPLOY_BLOCK;
+  let logs: Awaited<ReturnType<typeof query>>;
+  if (deploy !== undefined && deploy < window) {
     try {
-      logs = await query(env.KURIR_DEPLOY_BLOCK);
+      logs = await queryChunked(deploy, latest);
     } catch (err) {
-      console.warn("[guard] full-history getLogs refused, using recent window:", shortErr(err));
+      console.warn("[guard] full-history getLogs failed, using recent window:", shortErr(err));
       logs = await query(window);
     }
   } else {
-    logs = await query(env.KURIR_DEPLOY_BLOCK !== undefined && env.KURIR_DEPLOY_BLOCK > window ? env.KURIR_DEPLOY_BLOCK : window);
+    logs = await query(deploy !== undefined && deploy > window ? deploy : window);
   }
   return logs.map((l) => ({ to: getAddress(l.args.to!), amount: l.args.amount! }));
+
+  async function queryChunked(start: bigint, end: bigint) {
+    const size = env.LOG_CHUNK_BLOCKS;
+    const ranges: [bigint, bigint][] = [];
+    for (let b = start; b <= end; b += size) ranges.push([b, b + size - 1n < end ? b + size - 1n : end]);
+    if (ranges.length > env.LOG_MAX_CHUNKS) throw new Error(`${ranges.length} chunks exceeds LOG_MAX_CHUNKS`);
+    const out: Awaited<ReturnType<typeof query>> = [];
+    for (let i = 0; i < ranges.length; i += 4) {
+      const batch = await Promise.all(
+        ranges.slice(i, i + 4).map(([fromBlock, toBlock]) =>
+          publicClient.getContractEvents({
+            address: env.KURIR_RELAYER_ADDRESS,
+            abi: kurirRelayerAbi,
+            eventName: "Relayed",
+            args: { from },
+            fromBlock,
+            toBlock,
+          }),
+        ),
+      );
+      for (const part of batch) out.push(...part);
+    }
+    return out;
+  }
 }
 
 export function findLookalike(

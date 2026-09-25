@@ -30,6 +30,10 @@ const EnvSchema = z.object({
   LOG_LOOKBACK_BLOCKS: z.coerce.bigint().default(5000n),
   /** Block KurirRelayer was deployed in. When set, the poisoning check scans all history since then. */
   KURIR_DEPLOY_BLOCK: z.coerce.bigint().optional(),
+  /** Max blocks per getLogs call (publicnode's cap is 50,000). */
+  LOG_CHUNK_BLOCKS: z.coerce.bigint().min(1n).default(50000n),
+  /** Safety cap: beyond this many chunks, use the recent window instead (100 × 50k ≈ 26 days of testnet). */
+  LOG_MAX_CHUNKS: z.coerce.number().int().positive().default(100),
   OPENAI_API_KEY: z.string().default(""),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
   PORT: z.coerce.number().int().default(8787),
