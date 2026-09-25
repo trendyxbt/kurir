@@ -29,10 +29,12 @@ const { explainWarn } = await import("../src/llmExplain.js");
 const { env } = await import("../src/config.js");
 const { parseUnits, getAddress } = await import("viem");
 
+// Wait for `synced` (caught up to the chain head), not just `ready`: a loaded snapshot is usable at once
+// but the guard reports it as unconfirmed (CHECKS_DEGRADED) until the catch-up finishes.
 // The guard reads sender history from the in-memory index. Without it, it falls back to a request-path
 // log scan, which public RPCs refuse for old blocks, and (correctly) answers CHECKS_DEGRADED.
 startHistoryIndexer();
-while (!historyStatus().ready) await new Promise((r) => setTimeout(r, 300));
+while (!historyStatus().synced) await new Promise((r) => setTimeout(r, 300));
 
 const from = getAddress("0xE4ca0B609C94CDC7C3E8Ae33A53E95dcc2909b33"); // demo wallet
 const past = getAddress("0x1234567890abcdef1234567890abcdef12345678");

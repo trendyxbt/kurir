@@ -19,7 +19,7 @@ const known = getAddress("0xa0ddf5669c3f11cf6c5131509a5271c94708b002");
 
 if (process.env.HISTORY_INDEXER) {
   startHistoryIndexer();
-  while (!historyStatus().ready) await new Promise((r) => setTimeout(r, 500));
+  while (!historyStatus().synced) await new Promise((r) => setTimeout(r, 500));
 }
 const codes = (r: Awaited<ReturnType<typeof runGuard>>) => `${r.verdict} [${r.findings.map((f) => f.code).join(", ") || "none"}]`;
 const g = (to: typeof from) => runGuard({ token: env.TOKEN_ADDRESS, from, to, amount: 5n * 10n ** 18n });
