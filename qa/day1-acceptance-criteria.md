@@ -58,16 +58,16 @@ is a fail for this checklist even though `forge test` shows green.
 
 ## 4. Static / manual review checklist (independent of `forge test`)
 
-- [ ] Read `_relay` line by line against the checks-effects-interactions pattern:
+- [done] Read `_relay` line by line against the checks-effects-interactions pattern:
       nonce consumed → transfers happen. Confirm no external call precedes a
       state-changing check.
-- [ ] Confirm `SignatureChecker.isValidSignatureNow` is called with the correct
+- [done] Confirm `SignatureChecker.isValidSignatureNow` is called with the correct
       digest (`hashIntent`, which itself must match `SEND_INTENT_TYPEHASH` field
       order exactly — a single reordered field silently breaks all signatures).
-- [ ] Confirm every custom error (`NotDesignatedRelayer`, `IntentExpired`,
+- [done] Confirm every custom error (`NotDesignatedRelayer`, `IntentExpired`,
       `InvalidRecipient`, `InvalidSignature`) is actually reachable and actually
       used at the point the README/CLAUDE.md claims it is.
-- [ ] Confirm `MockStable` is clearly testnet-only in naming/comments so it can
+- [done] Confirm `MockStable` is clearly testnet-only in naming/comments so it can
       never be mistaken for a real asset in a later demo recording or screenshot.
 
 ## 5. Deployment verification
@@ -92,8 +92,8 @@ with a reason, and Section 4's checklist is fully checked. Partial completion
 | 2. Functional tests | ☒ Pass ☐ Fail | **Re-test:** F9 now implemented (`invalidateNonce()`) and tested with exact error. F1–F8 unchanged and passing. |
 | 3. Gap coverage | ☒ Pass ☐ Fail ☒ Accepted risk (see notes) | **Re-test:** G1 fixed (contract reverts `ZeroAmount`). G2 fixed off-chain (frontend + `/relay` reject `fee > amount`; the contract still honours the signature, by design). G3–G6 pass. G7 accepted risk (testnet only). |
 | 4. Static review | ☒ Pass ☐ Fail | **Re-test:** S1 fixed. The intent is fully validated and its nonce consumed before `permit()`, and `Relayed` is emitted before any state-changing external call. Proven by `test_QA_S1_*` (`expectCall` count 0 on an invalid intent). |
-| 5. Deployment | ☐ Pass ☐ Fail ☒ **Pending (2 items)** | **Deployed 2026-09-25.** D1 and D3 verified from chain. **D2 open:** BscScan pages sit behind a bot check QA can't pass, so a human must view them. **D4 open:** key was generated fresh this session (observed), but the plan requires Daviga's verbal confirmation. See QA-5 update. |
-| **Overall Day 1** | ☐ **Accepted** ☒ **Not yet accepted** | Sections 1–4 pass. Accept once D2 is viewed on BscScan, D4 is confirmed, and an independent QA session re-checks the fixes (see re-test caveat). |
+| 5. Deployment | ☒ Pass ☐ Fail | **Deployed 2026-09-25.** D1–D4 pass (D4 confirmed verbally by Daviga). See QA-5 update. |
+| **Overall Day 1** | ☒ **Accepted** ☐ **Not yet accepted** | All five sections pass. The open condition (independent re-check of the fixes) was closed by a separate QA session on 2026-09-25. See "Independent re-check" at the end of this file. |
 
 Original first-pass result (kept for the record): 2 Fail (F9), 3 Fail (G1/G2 open), 4 Fail (S1), 5 Fail. Overall Rejected.
 
@@ -201,9 +201,9 @@ Verified directly against chain 97 via RPC (`cast receipt` / `cast call`), not t
 | ID | Result | Evidence |
 |---|---|---|
 | D1 | **Pass** | MockStable `0xf9931457bdcf76bbfb957283a3ca2307e11813cc`, tx `0x25c55f9480e2a99d4ba64873b98c834c4c1f80d6c93fd86f2f014ca4d83d192d`, block 133031060, status 1, gas 957,452. KurirRelayer `0x9342dbb1e87ebef78b34fb0fbe9c2d06a3825370`, tx `0x759e63b3b1fa7afa2a96100715e2ab09e67301eb642a9277cbdc5293b5c9768f`, block 133031061, status 1, gas 967,826. Deployer `0xa0DdF5669C3F11CF6c5131509a5271C94708B002`. Total deploy cost 0.0001925 tBNB. |
-| D2 | **Open** | testnet.bscscan.com returned a bot-verification page to QA, and QA does not bypass bot checks. Contract creation is confirmed via RPC receipts (`contractAddress` field) and non-zero code size (3,905 / 4,171 bytes). A human needs to open: [MockStable](https://testnet.bscscan.com/address/0xf9931457bdcf76bbfb957283a3ca2307e11813cc), [KurirRelayer](https://testnet.bscscan.com/address/0x9342dbb1e87ebef78b34fb0fbe9c2d06a3825370). |
+| D2 | **Pass** | Daviga provided BscScan testnet screenshots (2026-09-25). MockStable page: creator `0xa0DdF566…94708B002`, token tracker "Kurir Test USD (tUSD)", 1 tx (`Faucet`, block 133032008). KurirRelayer page: creator `0xa0DdF566…94708B002`, 1 tx `0xbad8eb9b…` (block 133033066) with method `0x37bf820c` = `relayWithPermit` selector (checked with `cast sig`). Both match the RPC evidence. Note: source code is not verified on BscScan (the method shows as a raw selector), which is not required by D2. *Earlier note (resolved by the screenshots above):* testnet.bscscan.com returned a bot-verification page to QA, and QA does not bypass bot checks. Contract creation is confirmed via RPC receipts (`contractAddress` field) and non-zero code size (3,905 / 4,171 bytes). Links: [MockStable](https://testnet.bscscan.com/address/0xf9931457bdcf76bbfb957283a3ca2307e11813cc), [KurirRelayer](https://testnet.bscscan.com/address/0x9342dbb1e87ebef78b34fb0fbe9c2d06a3825370). |
 | D3 | **Pass** | `name()` = "Kurir Test USD", `symbol()` = "tUSD", `decimals()` = 18. `DOMAIN_SEPARATOR()` = `0x04ec8f9e…db07b00`, matching an independently computed EIP712Domain("Kurir", "1", 97, KurirRelayer). `SEND_INTENT_TYPEHASH()` matches the spec string. KurirRelayer tUSD balance = 0. |
-| D4 | **Open (verbal)** | QA observed the deployer key being created fresh with `cast wallet new ~/.foundry/keystores deployer` on 2026-09-25, and it is stored encrypted. The same key is the relayer bot key in `backend/.env` (gitignored; confirmed absent from all committed files). Needs Daviga's confirmation that it is not reused elsewhere. |
+| D4 | **Pass** | **Daviga confirmed verbally (2026-09-25): the key is used only for Kurir testnet, nowhere else.** Supporting observation: QA observed the deployer key being created fresh with `cast wallet new ~/.foundry/keystores deployer` on 2026-09-25, and it is stored encrypted. The same key is the relayer bot key in `backend/.env` (gitignored; confirmed absent from all committed files). |
 
 ### Live end-to-end on testnet (demo moment 1)
 
@@ -219,3 +219,35 @@ Tx [`0xbad8eb9bb97e2dc6820ec683fb6e6ce1ae0f1b5db70e389984cc1fb812430f97`](https:
 ### Issue found during testnet bring-up (fixed)
 
 The default RPC (`data-seed-prebsc-1-s1.bnbchain.org`) refuses `eth_getLogs` even for 100-block ranges (`-32005 limit exceeded`). Every `/guard` call therefore came back `CHECKS_DEGRADED` (a warning on every send) and the on-chain poisoning history was unavailable. The backend now defaults to `https://bsc-testnet-rpc.publicnode.com`, which served 5,000-block log queries in testing. The guard returns a clean `ok` on testnet.
+
+---
+
+## Independent re-check of the Day 1 fixes — 2026-09-25 (separate QA session)
+
+A new session that did not write the fixes or the earlier re-test. Everything below was
+re-run or re-derived from source and chain. Nothing was taken from the earlier notes.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Build | Pass | `forge clean && forge build` exit 0. Lint warnings are the same three justified kinds (`arbitrary-send-erc20` ×2, `reentrancy-events`). OZ tag `v5.1.0`. |
+| Full suite | Pass | `forge test` → 33 passed, 0 failed (18 dev + 15 QA). |
+| **Were tests loosened to get green?** | **No** | `git diff a4a388d HEAD -- test/`: the only change to an existing assertion *tightens* `test_Revert_PermitTooSmall` (bare `expectRevert()` → exact `ERC20InsufficientAllowance(kurir, 0, FEE)`). One narrowing: `testFuzz_NeverHoldsFunds` now assumes `amount > 0`. That is justified: zero amount now reverts by design, and `test_Revert_ZeroAmount` + `test_QA_G1_ZeroAmount_Reverts` cover it. |
+| F9 fix | Pass | `invalidateNonce()` calls `_useNonce(msg.sender)`, so it can only burn the caller's own nonce. The test asserts the event, `nonces == 1`, exact `InvalidAccountNonce(user, 1)` on the old signature, and recipient 0. |
+| G1 fix | Pass | `ZeroAmount` check runs before the signature check and nonce use. The test asserts the relayer got no fee and the nonce was not burned. |
+| G2 fix (off-chain) | Pass (code review) | `server.ts` rejects `fee > amount` (422 `FeeExceedsAmount`) and `amount == 0` (400). `amount`/`fee` are zod-parsed to `bigint`, so `=== 0n` is a real comparison. Frontend blocks `fee > amount` before any signature. Backend `tsc --noEmit` clean. The e2e script was **not** re-run in this pass (backend is outside the Day 1 contract scope). |
+| S1 fix | Pass | `relayWithPermit` = `_validateAndConsume` → `permit` (try/catch) → `_execute`. The only external call before the nonce write is `SignatureChecker` (ecrecover precompile, or ERC-1271 `staticcall`). `test_QA_S1_*` uses `expectCall` counts 0/1. |
+| **Deployed = fixed code** | **Pass** | Runtime bytecode on chain 97 matches `forge inspect … deployedBytecode` byte for byte outside the immutable slots, for both contracts (KurirRelayer 4,171 B, MockStable 3,905 B, 0 differing bytes outside the 224 immutable bytes). The CBOR metadata hash matches too, so the deployed source is exactly the current `src/`. Read-only `eth_call` of `relay` with `amount = 0` from the relayer → reverts `0x1f2a2005` = `ZeroAmount()`. `invalidateNonce()` selector `0x5a57b46f` is present. |
+| Custody | Pass | `balanceOf(KurirRelayer)` on testnet = 0. |
+
+**New observations (none block acceptance):**
+
+1. **`invalidateNonce()` cancels one intent, not all of them.** Nonces are sequential. If a user
+   has signed intents with nonce N and N+1, burning N makes N+1 the next valid nonce, so it
+   becomes relayable. The frontend only ever signs one pending intent at a time, so this can't
+   happen in the demo. The NatSpec already says "your next" intent. If a "cancel all" is ever needed, loop
+   or add `invalidateNonces(uint256 upTo)`. Informational.
+2. Section 2's test names (`test_GaslessSendWithPermit` etc.) still don't exist in the repo. The QA-2
+   mapping table remains the source of truth. Consider renaming the plan rows for Day 2.
+3. The QA doc edits (D2/D4 → Pass, sign-off) were uncommitted at the time of this check.
+
+**Verdict: the fixes hold up under independent review. Day 1 accepted.**
