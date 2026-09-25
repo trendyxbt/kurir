@@ -4,7 +4,7 @@ import { z } from "zod";
 import { formatUnits, getAddress, isAddress } from "viem";
 import { account, chain, env, relayerFee, TOKEN_DECIMALS } from "./config.js";
 import { runGuard, type GuardResult } from "./guard.js";
-import { explainWarn, llmEnabled } from "./llmExplain.js";
+import { explainWarn, llmEnabled, startLlmWarmup } from "./llmExplain.js";
 import { submitRelay, submitRelayWithPermit } from "./relay.js";
 
 // ---------- request schemas ----------
@@ -179,6 +179,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 app.listen(env.PORT, () => {
+  startLlmWarmup();
   console.log(`Kurir backend on http://localhost:${env.PORT}`);
   console.log(`  relayer bot:   ${account.address}`);
   console.log(`  KurirRelayer:  ${env.KURIR_RELAYER_ADDRESS}`);

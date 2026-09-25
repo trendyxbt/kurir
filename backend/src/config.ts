@@ -18,6 +18,9 @@ const address = z
   .refine((v) => isAddress(v, { strict: false }), "not a valid address")
   .transform((v) => getAddress(v));
 
+/** `KEY=` in .env means "unset", not "empty string". */
+const emptyToUndefined = (v: unknown) => (v === "" ? undefined : v);
+
 const EnvSchema = z.object({
   RPC_URL: z.string().url().default("https://bsc-testnet-rpc.publicnode.com"),
   RELAYER_PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/, "must be a 0x-prefixed 32-byte hex key"),
@@ -36,10 +39,12 @@ const EnvSchema = z.object({
   LOG_MAX_CHUNKS: z.coerce.number().int().positive().default(100),
   // Any OpenAI-compatible chat API. Explanations use the LLM only when LLM_BASE_URL or OPENAI_API_KEY is
   // set; otherwise the Bahasa templates are used. Local Ollama: LLM_BASE_URL=http://localhost:11434/v1.
-  LLM_BASE_URL: z.string().url().optional(),
+  LLM_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
   OPENAI_API_KEY: z.string().default(""),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+  /** Ollama only: keep the model loaded this long (e.g. "2h") so no demo request pays a cold load. */
+  LLM_KEEP_ALIVE: z.preprocess(emptyToUndefined, z.string().optional()),
   PORT: z.coerce.number().int().default(8787),
 });
 

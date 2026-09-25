@@ -58,13 +58,42 @@ Tugasmu: jelasin peringatan transaksi ke user awam dalam SATU kalimat pendek Bah
 gaya Gen Z Jakarta Selatan — santai, to the point, campur istilah Inggris secara natural (cek, double-check, literally, fresh).
 Aturan:
 - Keputusan (warn) udah final dari rule engine. Jangan bilang transaksinya aman, jangan bilang diblok.
+- Ini peringatan, bukan larangan: user yang mutusin lanjut atau nggak. Jangan bilang "jangan kirim" atau "batalin".
+- Kalau ada lebih dari satu finding, sebut semuanya secara singkat.
 - Sebut hal spesifik dari findings (misal berapa karakter yang beda, alamat mirip siapa).
-- Kasih satu saran aksi yang konkret.
+- Kasih satu saran aksi yang konkret (misal cek ulang alamat, test kirim kecil dulu).
 - Maksimal 30 kata. Tanpa emoji. Tanpa tanda kutip.`;
 
 /** True when an LLM is configured: a local/OpenAI-compatible server (LLM_BASE_URL) or an OpenAI key. */
 export const llmEnabled = Boolean(env.LLM_BASE_URL || env.OPENAI_API_KEY);
 const LLM_URL = `${(env.LLM_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "")}/chat/completions`;
+
+/**
+ * Ollama only: load the model now and keep it in memory for LLM_KEEP_ALIVE, refreshed every
+ * 30 min. A cold load takes ~11 s on the demo laptop; warm answers take ~3 s. The OpenAI-compatible
+ * /v1 endpoint ignores keep_alive, so this uses Ollama's native /api/generate.
+ */
+export function startLlmWarmup(): void {
+  if (!env.LLM_BASE_URL || !env.LLM_KEEP_ALIVE) return;
+  const url = `${new URL(env.LLM_BASE_URL).origin}/api/generate`;
+  const warm = async () => {
+    const t = Date.now();
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: env.OPENAI_MODEL, keep_alive: env.LLM_KEEP_ALIVE }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      console.log(`[llm] ${env.OPENAI_MODEL} loaded, kept for ${env.LLM_KEEP_ALIVE} (${Date.now() - t} ms)`);
+    } catch (err) {
+      console.warn("[llm] warm-up failed, explanations will fall back to templates if the model is slow:", err instanceof Error ? err.message : err);
+    }
+  };
+  void warm();
+  setInterval(warm, 30 * 60_000).unref();
+}
 
 /** Drop reasoning blocks some local models (e.g. Qwen3) emit, and keep one line. */
 function cleanOutput(text: string): string {
