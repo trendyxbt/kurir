@@ -34,8 +34,12 @@ const EnvSchema = z.object({
   LOG_CHUNK_BLOCKS: z.coerce.bigint().min(1n).default(50000n),
   /** Safety cap: beyond this many chunks, use the recent window instead (100 × 50k ≈ 26 days of testnet). */
   LOG_MAX_CHUNKS: z.coerce.number().int().positive().default(100),
+  // Any OpenAI-compatible chat API. Explanations use the LLM only when LLM_BASE_URL or OPENAI_API_KEY is
+  // set; otherwise the Bahasa templates are used. Local Ollama: LLM_BASE_URL=http://localhost:11434/v1.
+  LLM_BASE_URL: z.string().url().optional(),
   OPENAI_API_KEY: z.string().default(""),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
   PORT: z.coerce.number().int().default(8787),
 });
 

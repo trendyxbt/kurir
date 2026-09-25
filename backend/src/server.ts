@@ -4,7 +4,7 @@ import { z } from "zod";
 import { formatUnits, getAddress, isAddress } from "viem";
 import { account, chain, env, relayerFee, TOKEN_DECIMALS } from "./config.js";
 import { runGuard, type GuardResult } from "./guard.js";
-import { explainWarn } from "./llmExplain.js";
+import { explainWarn, llmEnabled } from "./llmExplain.js";
 import { submitRelay, submitRelayWithPermit } from "./relay.js";
 
 // ---------- request schemas ----------
@@ -183,5 +183,5 @@ app.listen(env.PORT, () => {
   console.log(`  relayer bot:   ${account.address}`);
   console.log(`  KurirRelayer:  ${env.KURIR_RELAYER_ADDRESS}`);
   console.log(`  token:         ${env.TOKEN_ADDRESS}`);
-  console.log(`  explanations:  ${env.OPENAI_API_KEY ? `OpenAI (${env.OPENAI_MODEL})` : "templates (no API key)"}`);
+  console.log(`  explanations:  ${llmEnabled ? `LLM ${env.OPENAI_MODEL} @ ${env.LLM_BASE_URL ?? "api.openai.com"}` : "templates (no LLM configured)"}`);
 });

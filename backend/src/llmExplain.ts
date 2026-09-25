@@ -62,16 +62,28 @@ Aturan:
 - Kasih satu saran aksi yang konkret.
 - Maksimal 30 kata. Tanpa emoji. Tanpa tanda kutip.`;
 
-/** For warn-level findings only. Falls back to templates on missing key, error, or timeout. */
+/** True when an LLM is configured: a local/OpenAI-compatible server (LLM_BASE_URL) or an OpenAI key. */
+export const llmEnabled = Boolean(env.LLM_BASE_URL || env.OPENAI_API_KEY);
+const LLM_URL = `${(env.LLM_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "")}/chat/completions`;
+
+/** Drop reasoning blocks some local models (e.g. Qwen3) emit, and keep one line. */
+function cleanOutput(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/<\/?think>/g, "").trim().split("\n")[0].trim();
+}
+
+/** For warn-level findings only. Falls back to templates when no LLM is configured, on error, or on timeout. */
 export async function explainWarn(findings: Finding[]): Promise<string> {
   const fallback = templateExplain(findings);
-  if (!env.OPENAI_API_KEY) return fallback;
+  if (!llmEnabled) return fallback;
 
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const res = await fetch(LLM_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.OPENAI_API_KEY}` },
-      signal: AbortSignal.timeout(8000),
+      headers: {
+        "Content-Type": "application/json",
+        ...(env.OPENAI_API_KEY ? { Authorization: `Bearer ${env.OPENAI_API_KEY}` } : {}),
+      },
+      signal: AbortSignal.timeout(env.LLM_TIMEOUT_MS),
       body: JSON.stringify({
         model: env.OPENAI_MODEL,
         temperature: 0.4,
@@ -85,10 +97,10 @@ export async function explainWarn(findings: Finding[]): Promise<string> {
         ],
       }),
     });
-    if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`LLM HTTP ${res.status}`);
     const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const text = json.choices?.[0]?.message?.content?.trim();
-    return text && text.length > 0 ? text : fallback;
+    const text = cleanOutput(json.choices?.[0]?.message?.content ?? "");
+    return text.length > 0 ? text : fallback;
   } catch (err) {
     console.warn("[llmExplain] falling back to template:", err instanceof Error ? err.message : err);
     return fallback;
