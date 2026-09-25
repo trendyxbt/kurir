@@ -19,6 +19,7 @@ const byFrom = new Map<Address, PastSend[]>();
 const seen = new Set<string>(); // txHash:logIndex, so backfill, polling and receipts never double-count
 let indexedTo: bigint | undefined; // last block fully indexed
 let ready = false;
+let lastOkAt = 0; // last time the head was confirmed reachable and indexed up to date
 
 const POLL_MS = 4000;
 
@@ -70,13 +71,17 @@ export function recordReceiptLogs(logs: Log[]): void {
   add(logs.filter((l) => l.address.toLowerCase() === env.KURIR_RELAYER_ADDRESS.toLowerCase()));
 }
 
-/** Past sends by `from`, or null while the startup backfill hasn't finished. */
-export function pastSends(from: Address): PastSend[] | null {
-  return ready ? (byFrom.get(getAddress(from)) ?? []) : null;
+/**
+ * Past sends by `from`, or null while the startup backfill hasn't finished. `fresh` is false when
+ * polling has stalled for over a minute, i.e. relays by other relayers may be missing.
+ */
+export function pastSends(from: Address): { sends: PastSend[]; fresh: boolean } | null {
+  if (!ready) return null;
+  return { sends: byFrom.get(getAddress(from)) ?? [], fresh: Date.now() - lastOkAt < env.HISTORY_STALE_MS };
 }
 
 export function historyStatus() {
-  return { ready, indexedTo: indexedTo?.toString(), senders: byFrom.size, events: seen.size };
+  return { ready, indexedTo: indexedTo?.toString(), senders: byFrom.size, events: seen.size, ageMs: ready ? Date.now() - lastOkAt : null };
 }
 
 export function startHistoryIndexer(): void {
@@ -88,6 +93,7 @@ export function startHistoryIndexer(): void {
         const start = env.KURIR_DEPLOY_BLOCK ?? (latest > env.LOG_LOOKBACK_BLOCKS ? latest - env.LOG_LOOKBACK_BLOCKS : 0n);
         await fetchHistory(start, latest);
         indexedTo = latest;
+        lastOkAt = Date.now();
         ready = true;
         console.log(`[history] backfilled blocks ${start}-${latest}: ${seen.size} relays from ${byFrom.size} senders (${Date.now() - t} ms)`);
         break;
@@ -103,6 +109,7 @@ export function startHistoryIndexer(): void {
           await fetchRecent(indexedTo + 1n, latest);
           indexedTo = latest;
         }
+        lastOkAt = Date.now();
       } catch {
         // a stalled poll just retries next tick; receipts of our own relays are recorded directly
       }

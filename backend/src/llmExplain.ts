@@ -41,7 +41,7 @@ function sentenceFor(f: Finding): string {
     case "UNKNOWN_CONTRACT":
       return "Tujuannya smart contract yang belum pernah kamu kirimin sebelumnya — bisa aja aman, tapi double-check dulu ya.";
     case "CHECKS_DEGRADED":
-      return "Sebagian pengecekan lagi nggak jalan karena node-nya susah dihubungi — hati-hati ekstra ya.";
+      return "Sebagian pengecekan belum bisa jalan karena koneksi ke jaringan lagi bermasalah — mending tunggu bentar terus cek lagi.";
   }
 }
 

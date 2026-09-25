@@ -91,14 +91,24 @@ export async function runGuard(input: GuardInput): Promise<GuardResult> {
   let degraded = false;
 
   // History comes from the in-memory index (instant). Only if its startup backfill hasn't
-  // finished yet do we fall back to querying logs on the request path.
-  const pastSends =
-    indexedPastSends(from) ??
-    (await readPastSends(from).catch((err) => {
+  // finished yet do we fall back to querying logs on the request path. Whenever the history we end
+  // up with may be incomplete, say so (CHECKS_DEGRADED) instead of returning a confident "ok".
+  let pastSends: PastSend[];
+  const indexed = indexedPastSends(from);
+  if (indexed) {
+    pastSends = indexed.sends;
+    if (!indexed.fresh) degraded = true; // index stopped catching up: recent relays may be missing
+  } else {
+    try {
+      const r = await readPastSends(from);
+      pastSends = r.sends;
+      if (r.partial) degraded = true;
+    } catch (err) {
       console.warn("[guard] getLogs failed, continuing with client history only:", shortErr(err));
       degraded = true;
-      return [] as PastSend[];
-    }));
+      pastSends = [];
+    }
+  }
 
   const known = new Set<Address>([
     ...(input.history ?? []).map((a) => getAddress(a)),
@@ -169,7 +179,8 @@ async function hedged<T>(read: (c: typeof primaryClient) => Promise<T>): Promise
   return Promise.any([first, second]);
 }
 
-async function readPastSends(from: Address): Promise<PastSend[]> {
+/** `partial` is true when the full history was wanted but only the recent window could be read. */
+async function readPastSends(from: Address): Promise<{ sends: PastSend[]; partial: boolean }> {
   // cacheTime 0: viem otherwise caches the block number (~4s) and a send relayed moments ago would be missed.
   const latest = await publicClient.getBlockNumber({ cacheTime: 0 });
   const window = latest > env.LOG_LOOKBACK_BLOCKS ? latest - env.LOG_LOOKBACK_BLOCKS : 0n;
@@ -189,17 +200,19 @@ async function readPastSends(from: Address): Promise<PastSend[]> {
   // recent window instead of losing history entirely.
   const deploy = env.KURIR_DEPLOY_BLOCK;
   let logs: Awaited<ReturnType<typeof query>>;
+  let partial = false;
   if (deploy !== undefined && deploy < window) {
     try {
       logs = await queryChunked(deploy, latest);
     } catch (err) {
       console.warn("[guard] full-history getLogs failed, using recent window:", shortErr(err));
       logs = await query(window);
+      partial = true; // QA2-5: the caller must not present this as a complete check
     }
   } else {
     logs = await query(deploy !== undefined && deploy > window ? deploy : window);
   }
-  return logs.map((l) => ({ to: getAddress(l.args.to!), amount: l.args.amount! }));
+  return { sends: logs.map((l) => ({ to: getAddress(l.args.to!), amount: l.args.amount! })), partial };
 
   async function queryChunked(start: bigint, end: bigint) {
     const size = env.LOG_CHUNK_BLOCKS;

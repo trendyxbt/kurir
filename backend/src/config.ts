@@ -38,6 +38,8 @@ const EnvSchema = z.object({
     z.string().url().default("https://bnb-testnet.api.onfinality.io/public"),
   ),
   ARCHIVE_CHUNK_BLOCKS: z.coerce.bigint().min(1n).default(5000n),
+  /** If the history index hasn't caught up for this long, the guard reports CHECKS_DEGRADED. */
+  HISTORY_STALE_MS: z.coerce.number().int().positive().default(60_000),
   /** Per-request RPC timeout. Public testnet RPCs answer in 0.1-0.7 s but ~1 in 5 requests stalls. */
   RPC_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
   RELAYER_PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/, "must be a 0x-prefixed 32-byte hex key"),
