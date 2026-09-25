@@ -34,6 +34,12 @@ USERKEY=<demo wallet key> npx tsx scripts/e2e-local.ts   # 17 checks: gasless se
 
 ### BSC testnet
 
+**Current deployment (chain 97):**
+- MockStable (tUSD): `0xf9931457bdcf76bbfb957283a3ca2307e11813cc`
+- KurirRelayer: `0x9342dbb1e87ebef78b34fb0fbe9c2d06a3825370`
+
+To redeploy:
+
 ```bash
 DEMO_WALLET=<0-BNB demo address> forge script script/Deploy.s.sol --rpc-url bsc_testnet --broadcast --account <your-key>
 ```

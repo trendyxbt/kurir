@@ -92,8 +92,8 @@ with a reason, and Section 4's checklist is fully checked. Partial completion
 | 2. Functional tests | ☒ Pass ☐ Fail | **Re-test:** F9 now implemented (`invalidateNonce()`) and tested with exact error. F1–F8 unchanged and passing. |
 | 3. Gap coverage | ☒ Pass ☐ Fail ☒ Accepted risk (see notes) | **Re-test:** G1 fixed (contract reverts `ZeroAmount`). G2 fixed off-chain (frontend + `/relay` reject `fee > amount`; the contract still honours the signature, by design). G3–G6 pass. G7 accepted risk (testnet only). |
 | 4. Static review | ☒ Pass ☐ Fail | **Re-test:** S1 fixed. The intent is fully validated and its nonce consumed before `permit()`, and `Relayed` is emitted before any state-changing external call. Proven by `test_QA_S1_*` (`expectCall` count 0 on an invalid intent). |
-| 5. Deployment | ☐ Pass ☒ Fail | **Still not deployed.** Unchanged from the first pass. |
-| **Overall Day 1** | ☐ **Accepted** ☒ **Rejected** | Sections 1–4 now pass. **Blocked only on Section 5** (testnet deploy + D4 confirmation). |
+| 5. Deployment | ☐ Pass ☐ Fail ☒ **Pending (2 items)** | **Deployed 2026-09-25.** D1 and D3 verified from chain. **D2 open:** BscScan pages sit behind a bot check QA can't pass, so a human must view them. **D4 open:** key was generated fresh this session (observed), but the plan requires Daviga's verbal confirmation. See QA-5 update. |
+| **Overall Day 1** | ☐ **Accepted** ☒ **Not yet accepted** | Sections 1–4 pass. Accept once D2 is viewed on BscScan, D4 is confirmed, and an independent QA session re-checks the fixes (see re-test caveat). |
 
 Original first-pass result (kept for the record): 2 Fail (F9), 3 Fail (G1/G2 open), 4 Fail (S1), 5 Fail. Overall Rejected.
 
@@ -191,3 +191,31 @@ Frontend verified in the browser pane: the fee > amount block works and a normal
 
 **Remaining before Day 1 can be accepted:** Section 5 (BSC testnet deploy, BscScan verification,
 D3 `cast call` checks) and D4 verbal confirmation from Daviga.
+
+---
+
+## QA-5 update — BSC testnet deployment, 2026-09-25
+
+Verified directly against chain 97 via RPC (`cast receipt` / `cast call`), not taken from the deploy log.
+
+| ID | Result | Evidence |
+|---|---|---|
+| D1 | **Pass** | MockStable `0xf9931457bdcf76bbfb957283a3ca2307e11813cc`, tx `0x25c55f9480e2a99d4ba64873b98c834c4c1f80d6c93fd86f2f014ca4d83d192d`, block 133031060, status 1, gas 957,452. KurirRelayer `0x9342dbb1e87ebef78b34fb0fbe9c2d06a3825370`, tx `0x759e63b3b1fa7afa2a96100715e2ab09e67301eb642a9277cbdc5293b5c9768f`, block 133031061, status 1, gas 967,826. Deployer `0xa0DdF5669C3F11CF6c5131509a5271C94708B002`. Total deploy cost 0.0001925 tBNB. |
+| D2 | **Open** | testnet.bscscan.com returned a bot-verification page to QA, and QA does not bypass bot checks. Contract creation is confirmed via RPC receipts (`contractAddress` field) and non-zero code size (3,905 / 4,171 bytes). A human needs to open: [MockStable](https://testnet.bscscan.com/address/0xf9931457bdcf76bbfb957283a3ca2307e11813cc), [KurirRelayer](https://testnet.bscscan.com/address/0x9342dbb1e87ebef78b34fb0fbe9c2d06a3825370). |
+| D3 | **Pass** | `name()` = "Kurir Test USD", `symbol()` = "tUSD", `decimals()` = 18. `DOMAIN_SEPARATOR()` = `0x04ec8f9e…db07b00`, matching an independently computed EIP712Domain("Kurir", "1", 97, KurirRelayer). `SEND_INTENT_TYPEHASH()` matches the spec string. KurirRelayer tUSD balance = 0. |
+| D4 | **Open (verbal)** | QA observed the deployer key being created fresh with `cast wallet new ~/.foundry/keystores deployer` on 2026-09-25, and it is stored encrypted. The same key is the relayer bot key in `backend/.env` (gitignored; confirmed absent from all committed files). Needs Daviga's confirmation that it is not reused elsewhere. |
+
+### Live end-to-end on testnet (demo moment 1)
+
+Tx [`0xbad8eb9bb97e2dc6820ec683fb6e6ce1ae0f1b5db70e389984cc1fb812430f97`](https://testnet.bscscan.com/tx/0xbad8eb9bb97e2dc6820ec683fb6e6ce1ae0f1b5db70e389984cc1fb812430f97), block 133033066, status 1.
+
+- Submitted by the relayer `0xa0Dd…B002` to KurirRelayer. The `Relayed` event names `from` = demo wallet `0xE4ca0B609C94CDC7C3E8Ae33A53E95dcc2909b33`.
+- Permit `Approval` = exactly 10.5 tUSD (amount 10 + fee 0.5), no open-ended approval.
+- Demo wallet afterwards: 989.5 tUSD, **0 tBNB, transaction count 0** (it has never sent a tx).
+- KurirRelayer tUSD balance afterwards: **0**.
+- **Measured:** gas used 133,306 at 0.1003 gwei, so **0.0000134 tBNB** paid by the relayer. Confirmation latency was not measured (the backend does not log request receipt time).
+- Note: the recipient in this run was the relayer's own address, so the relayer received both the 10 and the 0.5 fee.
+
+### Issue found during testnet bring-up (fixed)
+
+The default RPC (`data-seed-prebsc-1-s1.bnbchain.org`) refuses `eth_getLogs` even for 100-block ranges (`-32005 limit exceeded`). Every `/guard` call therefore came back `CHECKS_DEGRADED` (a warning on every send) and the on-chain poisoning history was unavailable. The backend now defaults to `https://bsc-testnet-rpc.publicnode.com`, which served 5,000-block log queries in testing. The guard returns a clean `ok` on testnet.

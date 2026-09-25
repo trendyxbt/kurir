@@ -44,7 +44,7 @@ kurir/
 ├── foundry.toml
 ├── backend/                  # Node/TypeScript relayer + guard service
 │   ├── package.json / tsconfig.json / .env.example
-│   ├── scripts/e2e-local.ts  # ✅ local rehearsal: 15 end-to-end checks against anvil
+│   ├── scripts/e2e-local.ts  # ✅ local rehearsal: 17 end-to-end checks against anvil
 │   └── src/
 │       ├── config.ts         # ✅ env validation (zod) + viem clients
 │       ├── abi.ts            # ✅ KurirRelayer ABI incl. token/OZ errors for revert decoding
@@ -61,7 +61,9 @@ kurir/
 - **Contracts: done.** `forge test` → 33/33 pass (16 dev + 13 QA incl. fuzz, reentrancy, all-fields tamper). Day 1 QA findings F9/G1/G2/S1 fixed — see `qa/day1-acceptance-criteria.md`.
 - **Backend: done.** Typechecks clean. `scripts/e2e-local.ts` passes 17/17 on local anvil (chain id 97).
 - **Frontend: done.** Both demo moments verified through the UI on local anvil.
-- **Not yet done:** BSC testnet deploy, OpenAI explanations (no key set — templates in use), demo recording, deck.
+- **BSC testnet: deployed and verified.** MockStable `0xf9931457bdcf76bbfb957283a3ca2307e11813cc`, KurirRelayer `0x9342dbb1e87ebef78b34fb0fbe9c2d06a3825370`, relayer/deployer `0xa0DdF5669C3F11CF6c5131509a5271C94708B002`, demo wallet `0xE4ca0B609C94CDC7C3E8Ae33A53E95dcc2909b33`. First gasless send: 133,306 gas, 0.0000134 tBNB paid by the relayer.
+- **Backend RPC:** publicnode (the bnbchain.org seed RPCs refuse `eth_getLogs`).
+- **Not yet done:** QA D2 (view BscScan) + D4 (verbal), demo moment 2 on testnet, OpenAI explanations (templates in use), demo recording, deck.
 
 Extra rules added beyond the original spec (all deterministic): `to == KurirRelayer` is an
 `InvalidRecipient`; `/relay` rejects a permit larger than `amount + fee`; `/relay` only accepts the
@@ -71,9 +73,7 @@ compares against the sender's own address. `GET /config` added so the frontend k
 ## Immediate next steps, in order
 
 1. ~~forge install~~ ✅  2. ~~forge test~~ ✅
-3. `forge script script/Deploy.s.sol --rpc-url bsc_testnet --broadcast --account <your-key>`
-   (get test BNB from the BNB Chain testnet faucet first) — save the two deployed
-   addresses into `backend/.env`.
+3. ~~testnet deploy~~ ✅ (addresses above)
 4. ~~backend~~ ✅  5. ~~frontend~~ ✅
 6. Record the two demo moments; write the pitch deck.
 

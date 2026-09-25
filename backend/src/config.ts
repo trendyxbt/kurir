@@ -19,7 +19,7 @@ const address = z
   .transform((v) => getAddress(v));
 
 const EnvSchema = z.object({
-  RPC_URL: z.string().url().default("https://data-seed-prebsc-1-s1.bnbchain.org:8545"),
+  RPC_URL: z.string().url().default("https://bsc-testnet-rpc.publicnode.com"),
   RELAYER_PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/, "must be a 0x-prefixed 32-byte hex key"),
   KURIR_RELAYER_ADDRESS: address,
   TOKEN_ADDRESS: address,
