@@ -89,13 +89,13 @@ Run these in order, capture actual output for each:
 
 | Section | Result | Notes |
 |---|---|---|
-| 1. Environment | ☒ Pass ☐ Fail | E1–E3 pass. Minor: a bad `SCAM_LIST` entry exits 1 but prints a raw stack trace instead of the "Invalid backend/.env" format. |
-| 2. Guard (8 cases) | ☒ Pass ☐ Fail | 8/8 plus 11 extra edges, unit level (19/19). Hard blocks still hold with the RPC dead. **But see finding QA2-2:** on-chain history only reaches back ~37 min on testnet, so poisoning detection without client history misses real lookalikes. |
-| 3. LLM explain | ☐ Pass ☐ Fail ☒ **Pending** | L1 and L3 pass (L3 proven with a fetch spy in the live server: 0 calls for ok/block, exactly 1 per warn). L2 not run (needs a real OpenAI key = API spend). L4: QA read done, voice passes; poisoning sentence needs a content fix (QA2-4); final tick is Daviga's. |
-| 4. Relay | ☒ Pass ☐ Fail | R1–R4 pass (13/13 on anvil). R1, R2 and replay also on testnet. |
-| 5. Server (S4 critical) | ☐ Pass ☒ Fail | **S4 passes, decisively** (see QA2-1). **S5 fails:** invalid JSON, a `null` body and a >32 kb body return **500**, not 4xx (QA2-3). |
-| 6. E2E curl walkthrough | ☒ Pass ☐ Fail | Steps 1–4 on BSC testnet, tx verified on chain independently. |
-| **Overall Day 2** | ☐ **Accepted** ☒ **Rejected** | Rejected on S5 (a 500 on malformed JSON) and pending L4. The S5 fix is small. QA2-2 does not fail a row but is the most important thing in this report for the demo. |
+| 1. Environment | ☒ Pass ☐ Fail | E1–E3 pass (first pass). Not re-run on `2b4b4df`'s config changes (`emptyToUndefined`, `LLM_KEEP_ALIVE`), which don't touch the E2 cases. |
+| 2. Guard (8 cases) | ☒ Pass ☐ Fail | 19/19 + dead-RPC 7/7 (re-run on `481fd7d`). QA2-2 and QA2-5 re-tested and **fixed** (see Re-test 2). |
+| 3. LLM explain | ☐ Pass ☐ Fail ☒ **Pending** | L1, L3 pass (L3 re-verified with the custom-endpoint path). **L2 now tested** with local qwen3:4b-instruct: the `2b4b4df` prompt passes (the earlier `4adbae9` prompt invented risk). **L4 still pending:** QA2-4 unfixed, plus Daviga's tick. |
+| 4. Relay | ☒ Pass ☐ Fail | Re-test 13/13. |
+| 5. Server (S4 critical) | ☒ Pass ☐ Fail | **Re-test: S5 fixed** (37/37). S4 still holds. |
+| 6. E2E curl walkthrough | ☒ Pass ☐ Fail | First pass on testnet. Not re-run: the relay path is unchanged in committed code. |
+| **Overall Day 2** | ☐ **Accepted** ☒ **Not yet accepted** | Only **L4 / QA2-4** remains (poisoning sentence shows the copied characters; plus Daviga's final voice tick). Everything else passes on `481fd7d`. |
 
 Day 2 is accepted only when every section passes **and** S4 specifically has
 been tested, not assumed. A green server that's never had its guard
@@ -106,7 +106,7 @@ most in this architecture.
 
 ## QA results — 2026-09-25 (QA: Claude, separate session from the backend's author)
 
-Code under test: `main` at `517bf77` (backend unchanged since `7c8076d`). All QA tests are new and
+Code under test: backend at `7c8076d` (*corrected in the re-test: this line first said `517bf77`, which was the commit before*). All QA tests are new and
 live in `backend/scripts/qa/`. The developer's checkpoint scripts (`guard-check.ts`,
 `relay-errors-check.ts`, `sign-intent.ts`) were **not** used as evidence. Signing is built from the
 EIP-712 spec, not from backend code.
@@ -260,3 +260,110 @@ tengahnya `5d1E2F…`, yang ini `ffffff…`"), or have the frontend show both fu
 - Block templates are two sentences ("… Diblok."). The one-sentence rule in the spec is for LLM warn output, so this is fine.
 
 **Verdict:** the voice passes. Fix QA2-4 before recording demo moment 2. The final L4 tick is Daviga's, as a native-speaker read that QA cannot replace.
+
+---
+
+## Re-test — 2026-09-25 late evening (same QA session as the first pass)
+
+**What was tested.** Commits since the first pass:
+- `35e0187` S5 fix + full poisoning history
+- `f37d9f6` 50k-block chunked log scan
+- `24893fb` / `2b4b4df` OpenAI-compatible LLM endpoint, local Ollama, warm-up
+
+Another session was **editing the backend during the re-test**, so everything was run against a **pinned git worktree at `4adbae9`**, never the moving working tree. L2 was then also run against the new prompt, which was committed mid-run as `2b4b4df`.
+
+**Not tested:** the history indexer (`guard.ts`, `relay.ts`, new `history.ts`), which was still uncommitted when QA finished.
+
+**QA tooling changes**
+- `llm-spy.mjs` now also intercepts `LLM_BASE_URL`'s host. An OpenAI-only spy would miss calls to a custom endpoint and make L3 pass falsely with 0 calls.
+- New scripts: `history-modes.ts` (QA2-2 control / chunked / fallback) and `l2-llm.ts` (L2).
+
+| Item | Result | Evidence |
+|---|---|---|
+| Regression: guard, relay, server | Pass | guard-unit 19/19, dead-RPC 7/7, relay-unit 13/13, http 37/37 (all on anvil) |
+| **S5** | **Fixed** | Invalid JSON and `null` → 400 `{"error":"BadRequest","message":"Body request harus JSON object yang valid."}`. >32 kb → 413 `PayloadTooLarge`. Server stays up. |
+| L3 (custom endpoint) | Pass | `LLM_BASE_URL=http://qa-llm.invalid/v1`: ok/block → 0 calls, each warn → 1 call (spy log shows host `qa-llm.invalid`) |
+| QA2-2, local | Fix works | Same data, 2-block window. Control (no `KURIR_DEPLOY_BLOCK`) → lookalike **missed** (`ok`). Chunked (9 chunks of 3 blocks, 4 per batch) → `warn [ADDRESS_POISONING]`, and `P` is known. |
+| **QA2-2, BSC testnet** | **Still open** | See below |
+| **QA2-5 (new)** | **Open** | See below |
+| L2 | Pass on `2b4b4df` prompt | See below |
+| L4 / QA2-4 | Still open | `sentenceFor()` is unchanged: the poisoning warning still shows only `0xa0Dd…B002`, the part a lookalike copies. The LLM output inherits the same short form. |
+
+**QA2-2 on testnet: history older than about 10.7 h cannot be read from publicnode.**
+- The lookalike of `0xa0Dd…B002` from the demo wallet, with no client history, still returns **`{"verdict":"ok","findings":[]}`**. The server log shows `[guard] full-history getLogs failed, using recent window: RPC Request failed.` on every request.
+- **Root cause:** publicnode is not an archive node. Probing it directly:
+  - `[deploy .. deploy+49,999]` → `-32701 History has been pruned for this block`
+  - `[deploy+50,000 .. latest]` → OK
+  - a bisection puts the prune depth at **~86,000 blocks ≈ 10.7 h**.
+- Deployment (block 133031061) passed that depth around 22:30. From then on, the first chunk always fails, the whole scan is thrown away, and the guard drops to the 5,000-block (~37 min) window. The fix was committed about 8.4 h after deployment, which is why it tested green then.
+- **Side effect:** the failed scan's retries made `/guard` take 11 s and 21 s on two of three calls.
+- **Direction:**
+  1. The relayer submits every Kurir send itself, so record each successful relay (the in-progress `recordReceiptLogs` does this) **and save it to disk**. An in-memory index backfilled from publicnode after a restart still can't see sends older than ~10.7 h.
+  2. Tolerate failed chunks: keep the chunks that succeed instead of discarding the whole scan.
+  3. Or use an archive RPC.
+
+**QA2-5 (new): when the full scan fails, the guard falls back silently.**
+- `history-modes.ts` fallback mode (`LOG_MAX_CHUNKS=1`) → full scan refused → `{"verdict":"ok","findings":[]}` for a real lookalike.
+- The `getLogs`-fails path adds `CHECKS_DEGRADED`, but the "full scan failed, fell back to the window" path does not, so the user gets a confident `ok` from partial data. On testnet this is currently every request (see QA2-2).
+- Fix: set `degraded = true` on that path too, or on any skipped chunk.
+- Also: `KURIR_DEPLOY_BLOCK=` (empty) is coerced to block `0`, i.e. scan from genesis, not "unset". `2b4b4df`'s `emptyToUndefined` is only applied to the LLM keys.
+
+**L2, local Ollama `qwen3:4b-instruct`** (free, no API spend). 5 warn cases × 3 runs through the real `explainWarn()`. Every output was read by QA, not just regex-checked.
+
+| Prompt | Format (Bahasa, one line, ≤30 words, no JSON/English/`<think>`) | Content | Latency (median / max) | Template fallbacks |
+|---|---|---|---|---|
+| `4adbae9` (old) | 14/15 | **Fails.** All 3 UNKNOWN_CONTRACT outputs invent risk: *"bisa jadi bocor"*, *"bisa jadi scam… jangan lanjutin"*, and *"jangan kirim ke orang yang mirip tapi beda 1 karakter"* (a poisoning claim with no poisoning finding). 3 say "jangan kirim". | 2.8 s / 10.0 s | 1/15 (timeout) |
+| **`2b4b4df` (current)** | 15/15 | **Passes.** No invented risk and no "jangan kirim". *"biar aman"* ("to be safe") is fine; QA's regex was too strict there. Minor: it copies the template's literal "(+1 catatan lain)" instead of naming the second finding (so the new rule isn't followed), and says "belum pernah kamu cek" where the finding means "never sent to". | 4.2 s / 5.4 s | 0/15 |
+
+With the LLM on, every `warn` in `/guard` takes ~3–5 s more (worst case up to the 10 s timeout, then the template). For the demo that's acceptable with the warm-up; templates stay the safe fallback.
+
+### Still open before Day 2 acceptance / demo recording
+
+1. **L4:** fix QA2-4 (show the differing middle of the address, in the template and in the LLM data), then Daviga's tick.
+2. **QA2-2:** poisoning history on testnet. The persisted relay record from the in-progress indexer is the robust fix, and it needs a fresh QA pass once committed.
+3. **QA2-5:** flag `CHECKS_DEGRADED` whenever history is partial.
+4. Minor: empty `KURIR_DEPLOY_BLOCK=` → genesis; plus the minor items from the first pass.
+
+---
+
+## Re-test 2 — `481fd7d` (history index, QA2-5 fix)
+
+**Tested** commit `481fd7d`, i.e. `f561a5a` (new `backend/src/history.ts`: in-memory index of every `Relayed` event, hedged RPC reads, failover RPC) plus the QA2-5 fix. Run against a pinned git worktree, because the working tree kept changing. Local anvil (chain id 97) plus the real BSC testnet deployment.
+
+**New QA scripts:** `history-index.ts` (IX1–IX5, over HTTP). `history-modes.ts` was re-used.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Regression | Pass | guard-unit 19/19 and dead-RPC 7/7 (these exercise the *not-ready fallback* path: no indexer in that process), relay-unit 13/13, http 37/37 (index path), L3 spy count unchanged (ok/block → 0, each warn → 1) |
+| IX1 backfill | Pass | Local: 3-block archive chunks over 9 blocks → 4 relays indexed. `/health` shows `ready`, `events`, `ageMs`. |
+| IX2 history reaches the guard | Pass | Lookalike of an address sent to before server start → `warn ADDRESS_POISONING`, no client history |
+| IX3 own relays recorded instantly, once | Pass | `/relay` → events 5→6 immediately and the lookalike of the new recipient is caught. After ≥2 poll ticks: still 6 (`txHash:logIndex` dedupe, no double count). |
+| IX4 relays by others are polled in | Pass, with a caveat | A relay submitted from a separate process is picked up (events 6→7, lookalike caught). The poller got it before that relay call even returned, because viem's receipt wait outlasts the 4 s poll. So this proves pickup, not a tight latency bound. |
+| IX5 latency | Pass | 30 `/guard` calls to a known address: median 1 ms, p95 1 ms (index path). Testnet `ok` paths: 0.06–0.16 s. |
+| Restart rebuild | Pass | Local: 7 relays before and after. Testnet: 10 before and after, 3.1 s. |
+| Stale index | Pass | `SIGSTOP` on anvil, `HISTORY_STALE_MS=5000`: after 9 s a `/guard` to a *known* address (so no RPC lookup can cause it) → `warn CHECKS_DEGRADED`. Block verdicts unaffected. `SIGCONT` → back to `ok` within one poll. |
+| **QA2-5 (silent fallback)** | **Fixed** | Same scenario that returned `ok [none]` on `4adbae9` now returns `warn [CHECKS_DEGRADED]`. Control mode (old behaviour, no deploy block) still misses the lookalike, so the test can tell old from new. |
+| **QA2-2 on BSC testnet** | **Fixed** | See below |
+
+**QA2-2 on BSC testnet: fixed.**
+- **Independent facts:**
+  - The default `ARCHIVE_RPC_URL` (`bnb-testnet.api.onfinality.io/public`) returns the block-133,033,066 event that publicnode had pruned. Its range cap: 10,000 blocks accepted, 20,000 rejected (`-32602`). The default chunk is 5,000.
+  - QA scanned every `Relayed` event since deployment on its own: **9 events, 3 distinct senders**.
+- **Result:** the server's backfill covered blocks 133,031,061–133,128,990 in 3.5 s and reported **9 relays from 3 senders**. That matches the independent scan exactly.
+- **The request that failed last time** (lookalike of `0xa0Dd…B002`, the address the demo wallet sent to 95,994 blocks earlier, past the ~86,000 where the previous fix broke, from the demo wallet, no client history) → **`warn [ADDRESS_POISONING]`** on 3/3 calls. Controls: the real address → `ok`; an unrelated fresh address → `ok`.
+- **Live relay on testnet:** the lookalike of a new recipient → `ok` before, `/relay` [`0x50714c8b…6fb8`](https://testnet.bscscan.com/tx/0x50714c8b356b0f713319e3c44bde90c3299d962c17b991ad64ef507acd8e6fb8) (block 133129417, 103,930 gas) → events 9→10 **immediately**, lookalike → `warn`, and still 10 after the poller ran.
+- **Latency:** warn responses took 3.6–6.1 s (median 4.6). That is the local `qwen3:4b-instruct` writing the explanation (the same request on `ok` paths takes 0.06–0.16 s). Consistent with L2's median of 4.2 s.
+- **Dead archive RPC** (`ARCHIVE_RPC_URL=http://127.0.0.1:1`): backfill keeps retrying in the background (`ready:false`), and `/guard` answers `warn [CHECKS_DEGRADED]` in 5.9 s. It never claims a confident `ok`.
+
+### Observations (none block acceptance)
+
+1. **Dependency on a free third-party archive endpoint.** Full history now depends on OnFinality's public endpoint (rate limits and availability unknown). It's used once per server start (~20 requests). If it's down at demo time, the guard degrades honestly (above) and demo moment 2 loses its history, unless the client-side `history` from the frontend's localStorage covers it. Mitigation: start the server well before the demo and check `/health` says `"ready": true` and `events` matches expectations.
+2. **The index is in memory only.** It rebuilds from chain on every start (3 s on testnet), so this is fine as long as an archive endpoint answers. If sends ever fall out of *every* free RPC's history, persist the relayer's own receipts to disk.
+3. When the backfill hasn't finished (or failed), every `/guard` call retries the chunked scan itself, costing seconds. Acceptable, and honest about it, but slow.
+4. `/health` now exposes `events`, `senders` and `indexedTo`, and CORS is open. Low risk on testnet; drop it from `/health` before any real deployment.
+5. `HEDGE_AFTER_MS` (0.4 s) and the fail-fast RPC timeouts were not stress-tested beyond the runs above.
+
+### Still open
+
+1. **L4 / QA2-4:** show the differing middle characters in the poisoning warning (both the template and the LLM prompt data), then Daviga's final voice read.
+2. Optional minor items from earlier: empty `KURIR_DEPLOY_BLOCK=` → genesis; `amount`/`fee` > uint256 max → 422 "retry" message; bad `SCAM_LIST` entry prints a stack trace.
