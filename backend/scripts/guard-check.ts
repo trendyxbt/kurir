@@ -8,6 +8,10 @@
  */
 process.env.OPENAI_API_KEY = "sk-fake-for-routing-test";
 process.env.SCAM_LIST = "0x000000000000000000000000000000000000dEaD";
+// Route explanations to the (spied) OpenAI URL even if .env points LLM_BASE_URL at local Ollama;
+// otherwise warn calls would bypass the spy and this script would report 0 LLM calls.
+process.env.LLM_BASE_URL = "";
+process.env.LLM_KEEP_ALIVE = "";
 
 const realFetch = globalThis.fetch;
 let llmCalls = 0;
@@ -20,9 +24,15 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 }) as typeof fetch;
 
 const { runGuard } = await import("../src/guard.js");
+const { startHistoryIndexer, historyStatus } = await import("../src/history.js");
 const { explainWarn } = await import("../src/llmExplain.js");
 const { env } = await import("../src/config.js");
 const { parseUnits, getAddress } = await import("viem");
+
+// The guard reads sender history from the in-memory index. Without it, it falls back to a request-path
+// log scan, which public RPCs refuse for old blocks, and (correctly) answers CHECKS_DEGRADED.
+startHistoryIndexer();
+while (!historyStatus().ready) await new Promise((r) => setTimeout(r, 300));
 
 const from = getAddress("0xE4ca0B609C94CDC7C3E8Ae33A53E95dcc2909b33"); // demo wallet
 const past = getAddress("0x1234567890abcdef1234567890abcdef12345678");

@@ -126,9 +126,11 @@
     body { transition: none; }
   }
   .balance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .balance-grid > * { min-width: 0; } /* grid items default to min-width:auto, which lets long numbers push past the card */
   .bal { border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; }
   .bal .k { font-family: "IBM Plex Mono", monospace; font-size: 10px; color: var(--ink-soft); letter-spacing: 0.1em; }
-  .bal .v { font-family: "IBM Plex Mono", monospace; font-size: 15px; font-weight: 600; margin-top: 2px; }
+  .bal .v { font-family: "IBM Plex Mono", monospace; font-size: 15px; font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
+  @media (max-width: 440px) { .balance-grid { grid-template-columns: 1fr; } }
   [hidden] { display: none !important; }
   @media (max-width: 480px) { body { padding: 18px; } .card { max-width: none; } }
 </style>
@@ -349,10 +351,23 @@ $("themeBtn").onclick = () => {
 
 // ---------- backend + chain ----------
 
+// Per-endpoint timeouts: /relay legitimately waits for a block, the rest should answer quickly.
+const TIMEOUT_MS = { "/config": 10_000, "/guard": 30_000, "/relay": 90_000 };
+
 async function api(path, body) {
-  const res = await fetch(API + path, body
-    ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
-    : undefined);
+  let res;
+  try {
+    res = await fetch(API + path, {
+      ...(body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
+      signal: AbortSignal.timeout(TIMEOUT_MS[path] ?? 30_000),
+    });
+  } catch {
+    // Network failure or timeout. Never show the browser's raw "Failed to fetch".
+    // After signing, the send may already have gone through, so say so.
+    throw new Error(path === "/relay"
+      ? "Koneksi ke backend putus pas transaksi diproses. Transaksinya mungkin udah terkirim, jadi cek saldo kamu dulu sebelum coba lagi."
+      : `Backend nggak bisa dihubungi di ${API}. Pastiin backend-nya jalan, lalu coba lagi.`);
+  }
   const json = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, json };
 }

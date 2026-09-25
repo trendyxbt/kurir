@@ -30,6 +30,9 @@ DEMO_WALLET=<0-BNB address> forge script script/Deploy.s.sol --rpc-url http://12
 # backend/.env: RPC_URL=http://127.0.0.1:8545, RELAYER_PRIVATE_KEY=<anvil key #1>, addresses from the deploy output
 cd backend && npm start
 USERKEY=<demo wallet key> npx tsx scripts/e2e-local.ts   # 17 checks: gasless send, replay, tamper, excess permit, zero amount, fee > amount, guard rules
+# ⚠ The backend requires chain id 97, so anvil must use 97 too. That is BSC testnet's id, and
+# `forge script --broadcast` then OVERWRITES the tracked testnet record broadcast/Deploy.s.sol/97/run-latest.json.
+# After any local rehearsal:   git checkout -- broadcast/ && git clean -fdq broadcast/
 ```
 
 ### BSC testnet
