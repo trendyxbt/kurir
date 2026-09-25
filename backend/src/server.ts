@@ -164,6 +164,16 @@ app.post("/relay", async (req, res) => {
 });
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  // express.json() marks its own failures with a 4xx status (bad JSON / non-object body → 400,
+  // over the size limit → 413). Those are client errors, not server errors.
+  const status = (err as { status?: unknown })?.status;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    const tooLarge = status === 413;
+    return void res.status(status).json({
+      error: tooLarge ? "PayloadTooLarge" : "BadRequest",
+      message: tooLarge ? "Request terlalu besar." : "Body request harus JSON object yang valid.",
+    });
+  }
   console.error("[server] unhandled:", err);
   res.status(500).json({ error: "Internal", message: "Server error." });
 });

@@ -153,15 +153,31 @@ export async function runGuard(input: GuardInput): Promise<GuardResult> {
 async function readPastSends(from: Address): Promise<PastSend[]> {
   // cacheTime 0: viem otherwise caches the block number (~4s) and a send relayed moments ago would be missed.
   const latest = await publicClient.getBlockNumber({ cacheTime: 0 });
-  const fromBlock = latest > env.LOG_LOOKBACK_BLOCKS ? latest - env.LOG_LOOKBACK_BLOCKS : 0n;
-  const logs = await publicClient.getContractEvents({
-    address: env.KURIR_RELAYER_ADDRESS,
-    abi: kurirRelayerAbi,
-    eventName: "Relayed",
-    args: { from },
-    fromBlock,
-    toBlock: latest,
-  });
+  const window = latest > env.LOG_LOOKBACK_BLOCKS ? latest - env.LOG_LOOKBACK_BLOCKS : 0n;
+  const query = (fromBlock: bigint) =>
+    publicClient.getContractEvents({
+      address: env.KURIR_RELAYER_ADDRESS,
+      abi: kurirRelayerAbi,
+      eventName: "Relayed",
+      args: { from },
+      fromBlock,
+      toBlock: latest,
+    });
+
+  // Full history since deployment when the deploy block is known (a 5,000-block window is only
+  // ~37 min at BSC testnet's 0.45 s blocks). If the RPC refuses that range as the chain grows,
+  // fall back to the recent window instead of losing history entirely.
+  let logs;
+  if (env.KURIR_DEPLOY_BLOCK !== undefined && env.KURIR_DEPLOY_BLOCK < window) {
+    try {
+      logs = await query(env.KURIR_DEPLOY_BLOCK);
+    } catch (err) {
+      console.warn("[guard] full-history getLogs refused, using recent window:", shortErr(err));
+      logs = await query(window);
+    }
+  } else {
+    logs = await query(env.KURIR_DEPLOY_BLOCK !== undefined && env.KURIR_DEPLOY_BLOCK > window ? env.KURIR_DEPLOY_BLOCK : window);
+  }
   return logs.map((l) => ({ to: getAddress(l.args.to!), amount: l.args.amount! }));
 }
 

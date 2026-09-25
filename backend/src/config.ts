@@ -28,6 +28,8 @@ const EnvSchema = z.object({
   POISON_MATCH_CHARS: z.coerce.number().int().min(2).max(10).default(4),
   LARGE_SEND_THRESHOLD: z.string().regex(/^\d+(\.\d+)?$/).default("500"),
   LOG_LOOKBACK_BLOCKS: z.coerce.bigint().default(5000n),
+  /** Block KurirRelayer was deployed in. When set, the poisoning check scans all history since then. */
+  KURIR_DEPLOY_BLOCK: z.coerce.bigint().optional(),
   OPENAI_API_KEY: z.string().default(""),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
   PORT: z.coerce.number().int().default(8787),
