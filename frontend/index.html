@@ -1,90 +1,261 @@
 <!doctype html>
-<html lang="id">
+<html lang="id" data-theme="light">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Kurir — kirim token tanpa BNB</title>
+<title>Kurir — kirim tanpa BNB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet" />
 <style>
-  :root { --fg:#111; --muted:#666; --line:#ddd; --ok:#0a7d35; --warn:#a15c00; --block:#b3261e; --bg:#fff; --card:#f7f7f5; }
+  :root, [data-theme="light"] {
+    --bg: #DAD5C2; --card: #E4E0D0; --ink: #24261F; --ink-soft: #55564A; --line: #B8B29B;
+    --input-bg: #F1EEE3; --input-border: #B8B29B;
+    --red: #A6382C; --green: #2F6B4F; --brass: #9C7A32;
+    --shadow: 0 1px 0 rgba(255,255,255,0.4) inset, 0 24px 48px -24px rgba(0,0,0,0.35);
+    --stamp-blend: multiply;
+  }
+  [data-theme="dark"] {
+    --bg: #14150F; --card: #1B1D18; --ink: #E8E4D6; --ink-soft: #A29D89; --line: #4A4A3E;
+    --input-bg: #232419; --input-border: #4A4A3E;
+    --red: #D9584A; --green: #4E9B78; --brass: #C99A4A;
+    --shadow: 0 24px 48px -24px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,154,74,0.08);
+    /* multiply turns a coloured stamp near-black on a dark card; screen keeps it legible */
+    --stamp-blend: screen;
+  }
   * { box-sizing: border-box; }
-  body { margin:0; font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--fg); background:var(--bg); }
-  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
-  h1 { margin: 0 0 4px; font-size: 28px; }
-  .sub { color: var(--muted); margin: 0 0 24px; }
-  section { border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; background:var(--card); }
-  h2 { font-size:15px; margin:0 0 12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
-  label { display:block; font-weight:600; margin:12px 0 4px; }
-  input { width:100%; padding:10px 12px; font:inherit; font-family: ui-monospace, Menlo, monospace; font-size:14px; border:1px solid #bbb; border-radius:8px; background:#fff; }
-  button { font:inherit; font-weight:600; padding:10px 16px; border-radius:8px; border:1px solid #111; background:#111; color:#fff; cursor:pointer; }
-  button.secondary { background:#fff; color:#111; }
-  button:disabled { opacity:.45; cursor:not-allowed; }
-  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; }
-  .mono { font-family: ui-monospace, Menlo, monospace; font-size:13px; word-break: break-all; }
-  .muted { color:var(--muted); font-size:14px; }
-  .link { background:none; border:none; color:#1a5fb4; padding:0; font-weight:500; text-decoration:underline; font-size:14px; }
-  table { width:100%; border-collapse:collapse; font-size:14px; }
-  td, th { padding:6px 4px; border-bottom:1px solid var(--line); text-align:left; }
-  td.num, th.num { text-align:right; font-variant-numeric: tabular-nums; font-family: ui-monospace, Menlo, monospace; }
-  .delta-pos { color: var(--ok); } .delta-neg { color: var(--block); }
-  .verdict { border-radius:8px; padding:12px 14px; margin-top:12px; border:2px solid; }
-  .verdict.ok { border-color:var(--ok); } .verdict.warn { border-color:var(--warn); } .verdict.block { border-color:var(--block); }
-  .verdict strong { display:block; margin-bottom:4px; }
-  .verdict.ok strong { color:var(--ok); } .verdict.warn strong { color:var(--warn); } .verdict.block strong { color:var(--block); }
-  .verdict ul { margin:8px 0 0; padding-left:18px; font-size:13px; color:var(--muted); }
-  #log { font-size:14px; }
-  #log div { padding:2px 0; }
-  .err { color: var(--block); }
-  .hidden { display:none !important; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Source Serif 4", Georgia, serif; font-size: 16px; line-height: 1.5;
+    min-height: 100vh; display: flex; justify-content: center; align-items: flex-start;
+    padding: 48px 18px; transition: background .2s, color .2s;
+  }
+  .mono, .label, button, input, .stamp, .wordmark, .net { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+  .card {
+    width: 100%; max-width: 420px; background: var(--card); border-radius: 10px;
+    box-shadow: var(--shadow); padding: 26px 22px;
+  }
+  header { display: flex; align-items: center; gap: 12px; }
+  .wordmark { font-weight: 700; font-size: 15px; letter-spacing: 0.14em; }
+  .net { margin-left: auto; font-size: 10px; color: var(--ink-soft); letter-spacing: 0.06em; }
+  .theme-btn {
+    width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border-radius: 6px;
+    background: transparent; color: var(--ink); border: 1px solid var(--line); cursor: pointer;
+  }
+  .barcode { display: flex; align-items: flex-end; gap: 2px; height: 16px; margin: 12px 0 4px; }
+  .barcode i { display: block; background: var(--ink); opacity: .55; }
+
+  .sec { border-top: 1px dashed var(--line); padding: 16px 0; }
+  .sec:first-child { border-top: none; }
+  .label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.12em; color: var(--ink-soft); margin-bottom: 10px;
+  }
+  .field-label { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-soft); margin: 12px 0 5px; display: block; }
+  .row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 14px; padding: 4px 0; }
+  .row .k { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+  .row .v { font-family: "IBM Plex Mono", monospace; font-size: 13px; text-align: right; word-break: break-all; }
+  .row.addr { flex-direction: column; align-items: stretch; gap: 2px; }
+  .row.addr .v { text-align: left; letter-spacing: 0.01em; }
+  .readonly { font-family: "IBM Plex Mono", monospace; font-size: 14px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 6px; }
+  input {
+    width: 100%; background: var(--input-bg); color: var(--ink); border: 1px solid var(--input-border);
+    border-radius: 6px; padding: 10px 12px; font-size: 14px; outline: none;
+  }
+  input:focus { border-color: var(--ink); }
+  .amount-group { display: flex; }
+  .amount-group input { border-radius: 6px 0 0 6px; }
+  .suffix {
+    font-family: "IBM Plex Mono", monospace; font-size: 13px; padding: 10px 12px; color: var(--ink-soft);
+    background: var(--input-bg); border: 1px solid var(--input-border); border-left: none; border-radius: 0 6px 6px 0;
+  }
+  .hint { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-soft); margin-top: 6px; }
+  .err { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--red); margin-top: 10px; }
+
+  button.primary, button.outline, button.brass {
+    width: 100%; padding: 12px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    letter-spacing: 0.06em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  button.primary { background: var(--ink); color: var(--card); border: 1px solid var(--ink); margin-top: 16px; }
+  button.brass { background: var(--brass); color: var(--card); border: 1px solid var(--brass); }
+  button.outline { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  button:disabled { opacity: .5; cursor: wait; }
+  .btn-stack { display: grid; gap: 10px; }
+  .connect { width: auto !important; margin: 0 !important; }
+  .wallet { display: flex; align-items: center; gap: 8px; font-family: "IBM Plex Mono", monospace; font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; }
+  .footer { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-soft); text-align: center; border-top: 1px dashed var(--line); padding-top: 14px; }
+
+  .stamp-wrap { text-align: center; padding: 18px 0 20px; }
+  .stamp {
+    display: inline-block; font-weight: 700; font-size: 17px; letter-spacing: 0.12em;
+    border: 3px solid currentColor; border-radius: 4px; padding: 6px 14px; background: transparent;
+    transform: rotate(-4deg); mix-blend-mode: var(--stamp-blend);
+  }
+  .stamp.warn { color: var(--brass); } .stamp.block { color: var(--red); } .stamp.ok { color: var(--green); }
+  .explain { font-style: italic; font-size: 16px; margin: 0; }
+  .chip { padding: 0 2px; border-radius: 3px; }
+  /* two-class selectors so the .green/.red text utilities below can't turn chip text into chip-coloured text */
+  .chip.brass { background: var(--brass); color: var(--card); } .chip.green { background: var(--green); color: var(--card); }
+  .red { color: var(--red); } .green { color: var(--green); } .brass-t { color: var(--brass); }
+  a { color: var(--ink); }
+
+  /* in transit */
+  .transit-head { text-align: center; padding: 10px 0 18px; }
+  .ring {
+    width: 38px; height: 38px; margin: 0 auto 12px; border-radius: 50%;
+    border: 3px solid var(--line); border-top-color: var(--brass); animation: spin 0.9s linear infinite;
+  }
+  .transit-title { font-family: "IBM Plex Mono", monospace; font-weight: 700; letter-spacing: 0.14em; color: var(--brass); }
+  .transit-sub { font-size: 14px; color: var(--ink-soft); margin-top: 4px; }
+  .steps { list-style: none; margin: 0; padding: 0; }
+  .steps li { display: flex; align-items: center; gap: 10px; font-family: "IBM Plex Mono", monospace; font-size: 13px; padding: 7px 0; }
+  .ico { width: 18px; height: 18px; display: grid; place-items: center; flex: none; }
+  .step-done { color: var(--ink); } .step-done .ico { color: var(--green); }
+  .step-now { color: var(--brass); }
+  .step-todo { color: var(--ink-soft); }
+  .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--brass); animation: pulse 1.2s ease-in-out infinite; }
+  .empty { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--ink-soft); }
+  .dim { opacity: .55; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.75); } }
+  @media (prefers-reduced-motion: reduce) {
+    .ring { animation: none; border-top-color: var(--brass); }
+    .pulse { animation: none; }
+    body { transition: none; }
+  }
+  .balance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .bal { border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; }
+  .bal .k { font-family: "IBM Plex Mono", monospace; font-size: 10px; color: var(--ink-soft); letter-spacing: 0.1em; }
+  .bal .v { font-family: "IBM Plex Mono", monospace; font-size: 15px; font-weight: 600; margin-top: 2px; }
+  [hidden] { display: none !important; }
+  @media (max-width: 480px) { body { padding: 18px; } .card { max-width: none; } }
 </style>
 </head>
 <body>
-<main>
-  <h1>Kurir</h1>
-  <p class="sub">Kirim token tanpa punya BNB. Kamu cuma tanda tangan, relayer yang bayar gas.</p>
+<main class="card">
+  <header>
+    <span class="wordmark">KURIR</span>
+    <span class="net">BSC TESTNET · 97</span>
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="Ganti tema terang/gelap" title="Ganti tema"></button>
+  </header>
+  <div class="barcode" id="barcode" aria-hidden="true"></div>
 
-  <section>
-    <h2>1 · Wallet</h2>
-    <div class="row" style="margin-top:0">
-      <button id="connect">Connect wallet</button>
-      <span id="account" class="mono muted"></span>
+  <!-- 1 · CONNECT + SEND -->
+  <section data-screen="send">
+    <div class="sec">
+      <div class="label">WALLET</div>
+      <button class="outline connect" id="connectBtn" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M16 12.5h2M3 9h13a2 2 0 0 0 2-2V5"/></svg>
+        Connect Wallet
+      </button>
+      <div class="wallet" id="walletInfo" hidden><span class="dot" aria-hidden="true"></span><span id="walletAddr"></span></div>
     </div>
-    <p id="cfgInfo" class="muted" style="margin:8px 0 0"></p>
-  </section>
-
-  <section>
-    <h2>Saldo</h2>
-    <table>
-      <thead><tr><th></th><th class="num">Sebelum</th><th class="num">Sekarang</th></tr></thead>
-      <tbody id="balances"><tr><td colspan="3" class="muted">Connect wallet dulu.</td></tr></tbody>
-    </table>
-  </section>
-
-  <section>
-    <h2>2 · Kirim</h2>
-    <form id="sendForm">
-      <label for="to">Alamat penerima</label>
-      <input id="to" placeholder="0x…" autocomplete="off" spellcheck="false" required />
-      <div class="row" style="margin-top:6px">
-        <button type="button" id="demoLookalike" class="link hidden">Demo: isi alamat yang mirip alamat lama</button>
+    <form class="sec" id="sendForm" novalidate>
+      <div class="label">MANIFEST — NEW SEND</div>
+      <span class="field-label">TOKEN</span>
+      <div class="readonly">Test USD / <span id="sym">tUSD</span></div>
+      <label class="field-label" for="to">RECIPIENT ADDRESS</label>
+      <input id="to" placeholder="0x…" autocomplete="off" spellcheck="false" />
+      <label class="field-label" for="amount">AMOUNT</label>
+      <div class="amount-group">
+        <input id="amount" inputmode="decimal" placeholder="10" autocomplete="off" />
+        <span class="suffix" id="sym2">tUSD</span>
       </div>
-      <label for="amount">Jumlah (<span id="sym">tUSD</span>)</label>
-      <input id="amount" inputmode="decimal" placeholder="10" autocomplete="off" required />
-      <p class="muted" id="feeLine" style="margin:6px 0 0"></p>
-      <div class="row">
-        <button type="submit" id="checkBtn" disabled>Cek dulu</button>
-      </div>
+      <div class="hint" id="feeHint"></div>
+      <div class="err" id="err" role="alert" hidden></div>
+      <button class="primary" id="checkBtn" type="submit">Check &amp; Send</button>
     </form>
+    <div class="footer">no BNB needed — relayer pays gas</div>
+  </section>
 
-    <div id="verdict" class="hidden"></div>
-    <div class="row hidden" id="confirmRow">
-      <button id="signBtn">Tanda tangan &amp; kirim</button>
-      <button id="cancelBtn" class="secondary">Batal</button>
+  <!-- 2 · GUARD WARNING -->
+  <section data-screen="warn" hidden>
+    <div class="stamp-wrap"><span class="stamp warn">WARNING</span></div>
+    <div class="sec">
+      <div class="label brass-t">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17h.01"/></svg>
+        GUARD FINDING
+      </div>
+      <p class="explain" id="warnText"></p>
+    </div>
+    <div class="sec">
+      <div class="label">MANIFEST DETAIL</div>
+      <div class="row addr"><span class="k">Recipient</span><span class="v" id="warnTo"></span></div>
+      <div class="row addr" id="warnPrevRow"><span class="k">Previously sent to</span><span class="v" id="warnPrev"></span></div>
+      <div class="row"><span class="k">Amount</span><span class="v" id="warnAmt"></span></div>
+    </div>
+    <div class="btn-stack">
+      <button class="brass" id="proceedBtn" type="button">Lanjut Aja</button>
+      <button class="outline" id="cancelWarnBtn" type="button">Batal, Cek Lagi</button>
     </div>
   </section>
 
-  <section>
-    <h2>3 · Status</h2>
-    <div id="log" class="muted">Belum ada transaksi.</div>
+  <!-- 3 · GUARD BLOCKED (no override path, by design) -->
+  <section data-screen="block" hidden>
+    <div class="stamp-wrap"><span class="stamp block">BLOCKED</span></div>
+    <div class="sec">
+      <div class="label red">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M7 12h10"/></svg>
+        GUARD FINDING
+      </div>
+      <p class="explain" id="blockText"></p>
+    </div>
+    <div class="sec">
+      <div class="label">MANIFEST DETAIL</div>
+      <div class="row addr"><span class="k">Recipient</span><span class="v" id="blockTo"></span></div>
+      <div class="row"><span class="k">Matches</span><span class="v red" id="blockMatch"></span></div>
+      <div class="row"><span class="k">Amount</span><span class="v" id="blockAmt"></span></div>
+    </div>
+    <button class="outline" id="changeAddrBtn" type="button">Ganti Alamat</button>
+  </section>
+
+  <!-- 4 · IN TRANSIT -->
+  <section data-screen="transit" hidden>
+    <div class="transit-head">
+      <div class="ring" aria-hidden="true"></div>
+      <div class="transit-title">IN TRANSIT</div>
+      <div class="transit-sub">Transaksi kamu sedang diproses...</div>
+    </div>
+    <div class="sec">
+      <ul class="steps" aria-live="polite">
+        <li class="step-done" id="st1"><span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></span>Ditandatangani</li>
+        <li class="step-now" id="st2"><span class="ico"><span class="pulse"></span></span>Relayer mengirim transaksi</li>
+        <li class="step-todo" id="st3"><span class="ico"><span class="empty"></span></span>Dikonfirmasi jaringan</li>
+      </ul>
+    </div>
+    <div class="sec dim">
+      <div class="row"><span class="k">Recipient</span><span class="v" id="transitTo"></span></div>
+      <div class="row"><span class="k">Amount</span><span class="v" id="transitAmt"></span></div>
+    </div>
+    <div class="footer">jangan tutup halaman ini</div>
+  </section>
+
+  <!-- 5 · DELIVERED -->
+  <section data-screen="done" hidden>
+    <div class="stamp-wrap"><span class="stamp ok">DELIVERED</span></div>
+    <div class="sec">
+      <div class="label">TRANSACTION</div>
+      <div class="row"><span class="k">Tx hash</span><span class="v"><a id="txLink" target="_blank" rel="noopener"></a></span></div>
+      <div class="row"><span class="k">Gas paid by</span><span class="v" id="gasBy"></span></div>
+      <div class="row"><span class="k">Your wallet spent</span><span class="v green" id="bnbSpent"></span></div>
+    </div>
+    <div class="sec">
+      <div class="label">BALANCE — YOU</div>
+      <div class="balance-grid">
+        <div class="bal"><div class="k">BEFORE</div><div class="v" id="youBefore"></div></div>
+        <div class="bal"><div class="k">AFTER</div><div class="v" id="youAfter"></div></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="label">BALANCE — RECIPIENT</div>
+      <div class="balance-grid">
+        <div class="bal"><div class="k">BEFORE</div><div class="v" id="toBefore"></div></div>
+        <div class="bal"><div class="k">AFTER</div><div class="v" id="toAfter"></div></div>
+      </div>
+    </div>
+    <button class="primary" id="againBtn" type="button">Send Another</button>
   </section>
 </main>
 
@@ -95,7 +266,7 @@ import {
 } from "https://esm.sh/viem@2.56.8";
 import { bscTestnet } from "https://esm.sh/viem@2.56.8/chains";
 
-// Backend URL: ?api=http://host:port overrides the default.
+// Backend: ?api=http://host:port overrides the local default.
 const API = new URLSearchParams(location.search).get("api") || "http://localhost:8787";
 
 const erc20 = parseAbi([
@@ -106,260 +277,333 @@ const erc20 = parseAbi([
 ]);
 const kurirAbi = parseAbi(["function nonces(address) view returns (uint256)"]);
 
+// EIP-712 types — field order must match SEND_INTENT_TYPEHASH (see README "EIP-712 signing spec").
 const SEND_INTENT_TYPES = {
   SendIntent: [
-    { name: "token", type: "address" },
-    { name: "from", type: "address" },
-    { name: "to", type: "address" },
-    { name: "amount", type: "uint256" },
-    { name: "fee", type: "uint256" },
-    { name: "relayer", type: "address" },
-    { name: "nonce", type: "uint256" },
-    { name: "deadline", type: "uint256" },
+    { name: "token", type: "address" }, { name: "from", type: "address" }, { name: "to", type: "address" },
+    { name: "amount", type: "uint256" }, { name: "fee", type: "uint256" }, { name: "relayer", type: "address" },
+    { name: "nonce", type: "uint256" }, { name: "deadline", type: "uint256" },
   ],
 };
 const PERMIT_TYPES = {
   Permit: [
-    { name: "owner", type: "address" },
-    { name: "spender", type: "address" },
-    { name: "value", type: "uint256" },
-    { name: "nonce", type: "uint256" },
-    { name: "deadline", type: "uint256" },
+    { name: "owner", type: "address" }, { name: "spender", type: "address" }, { name: "value", type: "uint256" },
+    { name: "nonce", type: "uint256" }, { name: "deadline", type: "uint256" },
   ],
 };
 
 const $ = (id) => document.getElementById(id);
-const state = { cfg: null, account: null, wallet: null, pub: null, symbol: "tUSD", pending: null, before: null, lastTo: null };
+const S = { cfg: null, account: null, wallet: null, pub: null, symbol: "tUSD", tokenName: null, pending: null };
 
-// ---------- helpers ----------
+// ---------- presentation helpers ----------
 
+function show(name) {
+  document.querySelectorAll("[data-screen]").forEach((el) => { el.hidden = el.dataset.screen !== name; });
+  window.scrollTo({ top: 0 });
+}
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-const fmt = (v, d = 18) => Number(formatUnits(v, d)).toLocaleString("id-ID", { maximumFractionDigits: 4 });
+const fmt = (v) => Number(formatUnits(v, 18)).toLocaleString("id-ID", { maximumFractionDigits: 4 });
+const amt = (v) => `${fmt(v)} ${S.symbol}`;
 
-function log(html, cls = "") {
-  const box = $("log");
-  if (box.classList.contains("muted")) { box.innerHTML = ""; box.classList.remove("muted"); }
-  const d = document.createElement("div");
-  d.className = cls;
-  d.innerHTML = html;
-  box.appendChild(d);
+/**
+ * Full address with the characters that differ from `other` wrapped in a coloured chip.
+ * Both are lowercased: checksum capitalisation differs between any two addresses and would
+ * hide the real difference behind case noise.
+ */
+function addrDiff(addr, other, tone) {
+  if (!other) return esc(addr);
+  const a = addr.toLowerCase(), b = other.toLowerCase();
+  let html = a.slice(0, 2), run = "";
+  for (let i = 2; i < a.length; i++) {
+    const diff = a[i].toLowerCase() !== b[i];
+    if (diff) { run += a[i]; continue; }
+    if (run) { html += `<span class="chip ${tone}">${esc(run)}</span>`; run = ""; }
+    html += esc(a[i]);
+  }
+  if (run) html += `<span class="chip ${tone}">${esc(run)}</span>`;
+  return html;
 }
 
-const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function setErr(msg) { $("err").hidden = !msg; $("err").textContent = msg || ""; }
+function busy(btn, text) { btn.dataset.label ??= btn.innerHTML; btn.disabled = true; btn.textContent = text; }
+function idle(btn) { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; }
 
-function historyKey() { return `kurir:history:${state.account.toLowerCase()}`; }
-function readHistory() {
-  try { return JSON.parse(localStorage.getItem(historyKey()) || "[]"); } catch { return []; }
-}
-function pushHistory(addr) {
-  try {
-    const h = readHistory().filter((a) => a.toLowerCase() !== addr.toLowerCase());
-    h.unshift(addr);
-    localStorage.setItem(historyKey(), JSON.stringify(h.slice(0, 50)));
-  } catch {}
-  refreshDemoLink();
-}
+// decorative barcode (deterministic so it doesn't shimmer between loads)
+(() => {
+  const widths = [1, 3, 1, 2, 4, 1, 1, 3, 2, 1, 4, 2, 1, 3, 1, 1, 2, 4, 1, 3, 1, 2, 1, 4, 2, 1];
+  const heights = [14, 10, 16, 12, 16, 8, 13, 16, 10, 15, 12, 16, 9, 14, 16, 11, 13, 16, 8, 12, 16, 10, 14, 16, 9, 13];
+  $("barcode").innerHTML = widths.map((w, i) => `<i style="width:${w}px;height:${heights[i]}px"></i>`).join("");
+})();
+
+// theme toggle (per-viewer preference; storage may be unavailable)
+const SUN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const MOON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+function applyTheme(t) { document.documentElement.dataset.theme = t; $("themeBtn").innerHTML = t === "dark" ? SUN : MOON; }
+try { applyTheme(localStorage.getItem("kurir:theme") === "dark" ? "dark" : "light"); } catch { applyTheme("light"); }
+$("themeBtn").onclick = () => {
+  const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(t);
+  try { localStorage.setItem("kurir:theme", t); } catch {}
+};
+
+// ---------- backend + chain ----------
 
 async function api(path, body) {
-  const res = await fetch(API + path, body ? {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-  } : undefined);
+  const res = await fetch(API + path, body
+    ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+    : undefined);
   const json = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, json };
 }
 
-// ---------- balances ----------
-
-async function readBalances() {
-  const { pub, cfg, account } = state;
-  const bal = (who) => pub.readContract({ address: cfg.token, abi: erc20, functionName: "balanceOf", args: [who] });
-  const rows = [
-    ["Kamu · " + state.symbol, bal(account)],
-    ["Kamu · BNB", pub.getBalance({ address: account })],
-    ["Relayer bot · " + state.symbol + " (fee)", bal(cfg.relayer)],
-    ["Kontrak Kurir · " + state.symbol, bal(cfg.kurirRelayer)],
-  ];
-  if (state.lastTo) rows.push(["Penerima " + short(state.lastTo) + " · " + state.symbol, bal(state.lastTo)]);
-  const values = await Promise.all(rows.map((r) => r[1]));
-  return rows.map((r, i) => ({ label: r[0], value: values[i] }));
-}
-
-async function renderBalances() {
-  const now = await readBalances();
-  const before = state.before;
-  $("balances").innerHTML = now.map((r) => {
-    const b = before?.find((x) => x.label === r.label);
-    const delta = b ? r.value - b.value : 0n;
-    const cls = delta > 0n ? "delta-pos" : delta < 0n ? "delta-neg" : "";
-    return `<tr><td>${escapeHtml(r.label)}</td>
-      <td class="num">${b ? fmt(b.value) : "—"}</td>
-      <td class="num ${cls}">${fmt(r.value)}${delta !== 0n ? ` (${delta > 0n ? "+" : ""}${fmt(delta)})` : ""}</td></tr>`;
-  }).join("");
-}
-
-// ---------- connect ----------
-
-$("connect").onclick = async () => {
+const historyKey = () => `kurir:history:${S.account.toLowerCase()}`;
+function readHistory() { try { return JSON.parse(localStorage.getItem(historyKey()) || "[]"); } catch { return []; } }
+function pushHistory(addr) {
   try {
-    if (!window.ethereum) throw new Error("Nggak ada wallet terdeteksi. Install MetaMask dulu.");
-    const cfgRes = await api("/config");
-    if (!cfgRes.ok) throw new Error("Backend nggak bisa dihubungi di " + API);
-    state.cfg = cfgRes.json;
+    const h = readHistory().filter((a) => a.toLowerCase() !== addr.toLowerCase());
+    localStorage.setItem(historyKey(), JSON.stringify([addr, ...h].slice(0, 50)));
+  } catch {}
+}
 
-    const chain = state.cfg.chainId === bscTestnet.id ? bscTestnet
-      : { ...bscTestnet, id: state.cfg.chainId, name: "Local (chain " + state.cfg.chainId + ")" };
-    state.wallet = createWalletClient({ chain, transport: custom(window.ethereum) });
-    state.pub = createPublicClient({ chain, transport: custom(window.ethereum) });
-
-    const [addr] = await state.wallet.requestAddresses();
-    state.account = getAddress(addr);
-
-    if ((await state.wallet.getChainId()) !== chain.id) {
-      try { await state.wallet.switchChain({ id: chain.id }); }
-      catch { await state.wallet.addChain({ chain }); await state.wallet.switchChain({ id: chain.id }); }
-    }
-
-    state.symbol = await state.pub.readContract({ address: state.cfg.token, abi: erc20, functionName: "symbol" });
-    $("sym").textContent = state.symbol;
-    $("account").textContent = state.account;
-    $("connect").textContent = "Terhubung";
-    $("connect").disabled = true;
-    $("checkBtn").disabled = false;
-    $("cfgInfo").innerHTML = `Relayer: <span class="mono">${short(state.cfg.relayer)}</span> · Kontrak: <span class="mono">${short(state.cfg.kurirRelayer)}</span>`;
-    $("feeLine").textContent = `Fee relayer: ${state.cfg.feeFormatted} ${state.symbol} (dipotong dari token yang sama, bukan BNB). Minimal kirim ${state.cfg.feeFormatted} ${state.symbol}.`;
-    refreshDemoLink();
-    await renderBalances();
+async function ensureChain97() {
+  const want = S.cfg.chainId;
+  if ((await S.wallet.getChainId()) === want) return;
+  try {
+    await S.wallet.switchChain({ id: want });
   } catch (e) {
-    log(escapeHtml(e.shortMessage || e.message), "err");
+    // 4902 = chain unknown to the wallet: add it, then switch.
+    if (e?.code === 4902 || /Unrecognized chain|not been added/i.test(e?.message || "")) {
+      await S.wallet.addChain({ chain: bscTestnet });
+      await S.wallet.switchChain({ id: want });
+    } else {
+      throw new Error("Pindah ke BSC Testnet (chain 97) dulu di wallet kamu, lalu coba lagi.");
+    }
+  }
+  if ((await S.wallet.getChainId()) !== want) throw new Error("Wallet masih belum di BSC Testnet (chain 97).");
+}
+
+async function balances(to, blockNumber) {
+  const at = blockNumber === undefined ? {} : { blockNumber };
+  const bal = (who) => S.pub.readContract({ address: S.cfg.token, abi: erc20, functionName: "balanceOf", args: [who], ...at });
+  const [you, recipient, bnb] = await Promise.all([bal(S.account), bal(to), S.pub.getBalance({ address: S.account, ...at })]);
+  return { you, recipient, bnb };
+}
+
+/**
+ * Balances as of the block the relay landed in. The wallet's RPC node can lag the relayer's by a
+ * block or two, and reading "latest" right after the receipt then returns pre-send numbers.
+ */
+async function balancesAfter(to, block) {
+  for (let i = 0; i < 40; i++) {
+    try {
+      if ((await S.pub.getBlockNumber({ cacheTime: 0 })) >= block) return await balances(to, block);
+    } catch { /* node not there yet */ }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error("balance read timed out");
+}
+
+// ---------- 1 · connect ----------
+
+$("connectBtn").onclick = async () => {
+  setErr("");
+  const btn = $("connectBtn");
+  try {
+    if (!window.ethereum) throw new Error("Wallet nggak ketemu. Install MetaMask dulu ya.");
+    busy(btn, "Menghubungkan…");
+    const cfg = await api("/config");
+    if (!cfg.ok) throw new Error(`Backend nggak bisa dihubungi di ${API}.`);
+    S.cfg = cfg.json;
+    S.wallet = createWalletClient({ chain: bscTestnet, transport: custom(window.ethereum) });
+    S.pub = createPublicClient({ chain: bscTestnet, transport: custom(window.ethereum) });
+    const [addr] = await S.wallet.requestAddresses();
+    S.account = getAddress(addr);
+    await ensureChain97();
+
+    [S.symbol, S.tokenName] = await Promise.all([
+      S.pub.readContract({ address: S.cfg.token, abi: erc20, functionName: "symbol" }),
+      S.pub.readContract({ address: S.cfg.token, abi: erc20, functionName: "name" }),
+    ]);
+    $("sym").textContent = S.symbol; $("sym2").textContent = S.symbol;
+    $("feeHint").textContent = `fee relayer ${S.cfg.feeFormatted} ${S.symbol}, dipotong dari ${S.symbol} (bukan BNB)`;
+    $("walletAddr").textContent = short(S.account);
+    $("walletInfo").hidden = false;
+    btn.hidden = true;
+
+    window.ethereum.on?.("accountsChanged", () => location.reload());
+    window.ethereum.on?.("chainChanged", () => location.reload());
+  } catch (e) {
+    idle(btn);
+    setErr(e.shortMessage || e.message);
   }
 };
 
-// ---------- demo helper for the poisoning moment ----------
-
-function refreshDemoLink() {
-  $("demoLookalike").classList.toggle("hidden", !state.account || readHistory().length === 0);
-}
-$("demoLookalike").onclick = () => {
-  const orig = readHistory()[0].toLowerCase().slice(2);
-  // Keep first 4 and last 4 hex chars, scramble 6 in the middle — classic address poisoning.
-  const flip = (c) => "0123456789abcdef"[(parseInt(c, 16) + 7) % 16];
-  const mid = orig.slice(4, 36).split("").map((c, i) => (i >= 13 && i < 19 ? flip(c) : c)).join("");
-  $("to").value = "0x" + orig.slice(0, 4) + mid + orig.slice(36);
-};
-
-// ---------- step 1: guard ----------
+// ---------- 1 → guard ----------
 
 $("sendForm").onsubmit = async (ev) => {
   ev.preventDefault();
-  resetVerdict();
-  const toRaw = $("to").value.trim();
-  if (!isAddress(toRaw, { strict: false })) return showVerdict({ verdict: "block", explanation: "Format alamatnya nggak valid, cek lagi ya.", findings: [] });
-  let amount;
-  try { amount = parseUnits($("amount").value.trim().replace(",", "."), state.cfg.tokenDecimals); }
-  catch { return showVerdict({ verdict: "block", explanation: "Jumlahnya nggak valid.", findings: [] }); }
-  if (amount <= 0n) return showVerdict({ verdict: "block", explanation: "Jumlahnya harus lebih dari 0.", findings: [] });
-  if (BigInt(state.cfg.fee) > amount) {
-    return showVerdict({ verdict: "block", findings: [],
-      explanation: `Fee relayer (${state.cfg.feeFormatted} ${state.symbol}) lebih gede dari jumlah kirimnya. Minimal kirim ${state.cfg.feeFormatted} ${state.symbol}.` });
-  }
+  setErr("");
+  if (!S.account) return setErr("Connect wallet dulu.");
 
-  const to = getAddress(toRaw.toLowerCase());
-  $("checkBtn").disabled = true;
-  $("checkBtn").textContent = "Ngecek…";
+  const raw = $("to").value.trim();
+  if (!isAddress(raw, { strict: false })) return setErr("Format alamatnya nggak valid, cek lagi ya.");
+  let amount;
+  try { amount = parseUnits($("amount").value.trim().replace(",", "."), S.cfg.tokenDecimals); }
+  catch { return setErr("Jumlahnya nggak valid."); }
+  if (amount <= 0n) return setErr("Jumlahnya harus lebih dari 0.");
+  const fee = BigInt(S.cfg.fee);
+  if (fee > amount) return setErr(`Fee relayer (${S.cfg.feeFormatted} ${S.symbol}) lebih gede dari jumlah kirimnya. Minimal kirim ${S.cfg.feeFormatted} ${S.symbol}.`);
+
+  const to = getAddress(raw.toLowerCase());
+  const btn = $("checkBtn");
+  busy(btn, "Ngecek…");
   try {
+    await ensureChain97();
+    // Guard BEFORE any signature.
     const { ok, json } = await api("/guard", {
-      token: state.cfg.token, from: state.account, to, amount: amount.toString(), history: readHistory(),
+      token: S.cfg.token, from: S.account, to, amount: amount.toString(), history: readHistory(),
     });
-    if (!ok) throw new Error(json.message || "Guard error");
-    state.pending = { to, amount };
-    showVerdict(json);
-    if (json.verdict === "ok") await signAndRelay();
+    if (!ok) throw new Error(json.message || "Guard lagi error, coba lagi.");
+    S.pending = { to, amount, fee, guard: json };
+
+    if (json.verdict === "block") return showBlock(json);
+    if (json.verdict === "warn") return showWarn(json);
+    await signAndRelay(btn); // ok → straight through
   } catch (e) {
-    log(escapeHtml(e.message), "err");
+    show("send");
+    setErr(e.shortMessage || e.message);
   } finally {
-    $("checkBtn").disabled = false;
-    $("checkBtn").textContent = "Cek dulu";
+    idle(btn);
   }
 };
 
-function resetVerdict() {
-  $("verdict").className = "hidden";
-  $("confirmRow").classList.add("hidden");
-  state.pending = null;
+function showWarn(g) {
+  const { to, amount } = S.pending;
+  const poison = g.findings.find((f) => f.code === "ADDRESS_POISONING");
+  const prev = poison?.data?.similarTo;
+  $("warnText").textContent = g.explanation || "Ada yang janggal sama transaksi ini, cek lagi sebelum lanjut.";
+  $("warnTo").innerHTML = addrDiff(to, prev, "brass");
+  $("warnPrevRow").hidden = !prev;
+  if (prev) $("warnPrev").innerHTML = addrDiff(prev, to, "green");
+  $("warnAmt").textContent = amt(amount);
+  idle($("proceedBtn"));
+  show("warn");
 }
 
-function showVerdict(g) {
-  const title = { ok: "Aman, lanjut.", warn: "Hmm, cek dulu.", block: "Diblok." }[g.verdict];
-  const v = $("verdict");
-  v.className = "verdict " + g.verdict;
-  v.innerHTML = `<strong>${title}</strong>${g.explanation ? escapeHtml(g.explanation) : ""}` +
-    (g.findings?.length ? `<ul>${g.findings.map((f) => `<li>${escapeHtml(f.code)}</li>`).join("")}</ul>` : "");
-  $("confirmRow").classList.toggle("hidden", g.verdict !== "warn");
-  $("signBtn").textContent = "Lanjut aja";
+const MATCH_LABEL = {
+  RECIPIENT_IS_TOKEN: () => `${S.symbol} contract`,
+  RECIPIENT_IS_ZERO: () => "zero (burn) address",
+  RECIPIENT_IS_RELAYER: () => "Kurir relayer contract",
+  SCAM_LIST: () => "known scam list",
+};
+function showBlock(g) {
+  const { to, amount } = S.pending;
+  const f = g.findings[0];
+  $("blockText").textContent = g.explanation || "Transaksi ini diblok.";
+  $("blockTo").textContent = to;
+  $("blockMatch").textContent = (MATCH_LABEL[f?.code] || (() => "guard rule"))();
+  $("blockAmt").textContent = amt(amount);
+  show("block");
 }
 
-$("cancelBtn").onclick = resetVerdict;
-$("signBtn").onclick = () => signAndRelay();
+$("cancelWarnBtn").onclick = () => { S.pending = null; show("send"); };
+$("changeAddrBtn").onclick = () => { S.pending = null; $("to").value = ""; show("send"); $("to").focus(); };
+$("proceedBtn").onclick = async () => {
+  const btn = $("proceedBtn");
+  try { await signAndRelay(btn); }
+  catch (e) { show("send"); setErr(e.shortMessage || e.message); }
+  finally { idle(btn); }
+};
 
-// ---------- step 2: sign intent + permit, relay ----------
+// ---------- sign (2 signatures, 0 gas) → 4 · in transit → 5 · delivered ----------
 
-async function signAndRelay() {
-  const { cfg, account, wallet, pub } = state;
-  const { to, amount } = state.pending;
-  $("confirmRow").classList.add("hidden");
-  const fee = BigInt(cfg.fee);
+async function signAndRelay(btn) {
+  const { to, amount, fee } = S.pending;
+  const { cfg, account, wallet, pub } = S;
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 10 * 60);
 
+  const before = await balances(to);
+  const [intentNonce, permitNonce] = await Promise.all([
+    pub.readContract({ address: cfg.kurirRelayer, abi: kurirAbi, functionName: "nonces", args: [account] }),
+    pub.readContract({ address: cfg.token, abi: erc20, functionName: "nonces", args: [account] }),
+  ]);
+  const intent = { token: cfg.token, from: account, to, amount, fee, relayer: cfg.relayer, nonce: intentNonce, deadline };
+
+  let signature, permitSig;
   try {
-    state.lastTo = to;
-    state.before = await readBalances();
-
-    const [intentNonce, permitNonce, tokenName] = await Promise.all([
-      pub.readContract({ address: cfg.kurirRelayer, abi: kurirAbi, functionName: "nonces", args: [account] }),
-      pub.readContract({ address: cfg.token, abi: erc20, functionName: "nonces", args: [account] }),
-      pub.readContract({ address: cfg.token, abi: erc20, functionName: "name" }),
-    ]);
-
-    const intent = { token: cfg.token, from: account, to, amount, fee, relayer: cfg.relayer, nonce: intentNonce, deadline };
-
-    log("1/2 · Tanda tangan transaksi (gratis, tanpa gas)…");
-    const signature = await wallet.signTypedData({
+    busy(btn, "Tanda tangan di wallet (1/2)…");
+    signature = await wallet.signTypedData({
       account,
       domain: { name: "Kurir", version: "1", chainId: cfg.chainId, verifyingContract: cfg.kurirRelayer },
       types: SEND_INTENT_TYPES, primaryType: "SendIntent", message: intent,
     });
-
-    log(`2/2 · Tanda tangan izin token (persis ${fmt(amount + fee)} ${state.symbol}, nggak lebih)…`);
-    const permitSig = await wallet.signTypedData({
+    busy(btn, "Tanda tangan izin token (2/2)…");
+    permitSig = await wallet.signTypedData({
       account,
-      domain: { name: tokenName, version: "1", chainId: cfg.chainId, verifyingContract: cfg.token },
+      domain: { name: S.tokenName, version: "1", chainId: cfg.chainId, verifyingContract: cfg.token },
       types: PERMIT_TYPES, primaryType: "Permit",
+      // exactly amount + fee — never an open-ended approval
       message: { owner: account, spender: cfg.kurirRelayer, value: amount + fee, nonce: permitNonce, deadline },
     });
-    const { r, s, v, yParity } = parseSignature(permitSig);
-
-    log("Relayer lagi submit &amp; bayar gas…");
-    const str = (o) => Object.fromEntries(Object.entries(o).map(([k, x]) => [k, typeof x === "bigint" ? x.toString() : x]));
-    const { ok, json } = await api("/relay", {
-      intent: str(intent),
-      signature,
-      permit: { value: (amount + fee).toString(), deadline: deadline.toString(), v: Number(v ?? BigInt(yParity + 27)), r, s },
-    });
-
-    if (!ok) {
-      if (json.guard) showVerdict(json.guard);
-      throw new Error(json.message || json.guard?.explanation || json.error || "Relay gagal");
-    }
-    pushHistory(to);
-    log(`${json.status === "success" ? "✓ Terkirim" : "✗ Revert"} · <a href="${escapeHtml(json.explorerUrl)}" target="_blank" rel="noopener">${short(json.txHash)} di BscScan</a> · gas ${Number(json.gasUsed).toLocaleString("id-ID")} (dibayar relayer)`,
-      json.status === "success" ? "" : "err");
-    $("to").value = ""; $("amount").value = "";
-    $("verdict").className = "hidden";
-    await renderBalances();
   } catch (e) {
-    log(escapeHtml(e.shortMessage || e.message), "err");
+    if (e?.code === 4001 || /reject|denied/i.test(e?.message || "")) throw new Error("Tanda tangan dibatalkan. Nggak ada yang terkirim.");
+    throw e;
+  }
+  const { r, s, v, yParity } = parseSignature(permitSig);
+
+  // 4 · in transit
+  $("transitTo").textContent = short(to);
+  $("transitAmt").textContent = amt(amount);
+  setStep(2);
+  show("transit");
+
+  const str = (o) => Object.fromEntries(Object.entries(o).map(([k, x]) => [k, typeof x === "bigint" ? x.toString() : x]));
+  const { ok, json } = await api("/relay", {
+    intent: str(intent),
+    signature,
+    permit: { value: (amount + fee).toString(), deadline: deadline.toString(), v: Number(v ?? BigInt(yParity + 27)), r, s },
+  });
+  if (!ok) {
+    if (json.guard?.verdict === "block") { S.pending.guard = json.guard; return showBlock(json.guard); }
+    throw new Error(json.message || "Relayer gagal mengirim. Coba lagi sebentar.");
+  }
+  if (json.status !== "success") throw new Error("Transaksi gagal di jaringan (reverted). Saldo kamu nggak berubah.");
+
+  setStep(3);
+  // The send already succeeded; a slow balance read must never look like a failure.
+  let after = null;
+  try { after = await balancesAfter(to, BigInt(json.blockNumber)); } catch {}
+  pushHistory(to);
+
+  // 5 · delivered — every number below is read from chain, not assumed
+  $("txLink").innerHTML = `${esc(short(json.txHash))} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>`;
+  $("txLink").href = json.explorerUrl;
+  $("txLink").setAttribute("aria-label", `Lihat transaksi ${json.txHash} di BscScan testnet`);
+  $("gasBy").textContent = `relayer bot ${short(cfg.relayer)}`;
+  $("bnbSpent").textContent = after ? `${formatUnits(before.bnb - after.bnb, 18)} BNB` : "— (cek BscScan)";
+  $("youBefore").textContent = amt(before.you);
+  $("youAfter").textContent = after ? amt(after.you) : "—";
+  $("toBefore").textContent = amt(before.recipient);
+  $("toAfter").textContent = after ? amt(after.recipient) : "—";
+  await new Promise((r) => setTimeout(r, 450)); // let the third tracker step register
+  show("done");
+}
+
+/** Tracker: steps before n are done, n is current; n = 3 marks everything done. */
+function setStep(n) {
+  const check = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>';
+  for (const i of [1, 2, 3]) {
+    const state = n === 3 || i < n ? "done" : i === n ? "now" : "todo";
+    const li = $(`st${i}`);
+    li.className = `step-${state}`;
+    li.querySelector(".ico").innerHTML = state === "done" ? check : state === "now" ? '<span class="pulse"></span>' : '<span class="empty"></span>';
   }
 }
+
+$("againBtn").onclick = () => {
+  S.pending = null; $("to").value = ""; $("amount").value = ""; setErr(""); show("send");
+};
 </script>
 </body>
 </html>
