@@ -38,6 +38,10 @@ const EnvSchema = z.object({
     z.string().url().default("https://bnb-testnet.api.onfinality.io/public"),
   ),
   ARCHIVE_CHUNK_BLOCKS: z.coerce.bigint().min(1n).default(5000n),
+  /** Pause between archive requests: the free endpoint allows a burst of ~3, then wants ~1 request/s. */
+  ARCHIVE_MIN_INTERVAL_MS: z.coerce.number().int().min(0).default(800),
+  /** Where the history index is saved ("off" disables). Default: backend/.cache */
+  HISTORY_CACHE_DIR: z.preprocess(emptyToUndefined, z.string().optional()),
   /** If the history index hasn't caught up for this long, the guard reports CHECKS_DEGRADED. */
   HISTORY_STALE_MS: z.coerce.number().int().positive().default(60_000),
   /** Per-request RPC timeout. Public testnet RPCs answer in 0.1-0.7 s but ~1 in 5 requests stalls. */

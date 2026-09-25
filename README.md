@@ -97,6 +97,26 @@ Send it as `{ value, deadline, v, r, s }`.
 Only `warn` explanations may use an LLM (OpenAI, if `OPENAI_API_KEY` is set); otherwise fixed
 Indonesian templates are used. The LLM only writes the sentence — it never sets the verdict.
 
+## History index and its snapshot
+
+The poisoning check needs every past send by the sender. `backend/src/history.ts` keeps them in memory
+(so `/guard` never waits on `eth_getLogs`) and also saves them to `backend/.cache/` (gitignored):
+
+- **First start:** old history comes from `ARCHIVE_RPC_URL` (a free archive endpoint that rate-limits:
+  a burst of ~3 requests, then ~1/s, so requests are throttled and retried), recent history from `RPC_URL`.
+  Progress is saved as it goes, so an interrupted backfill resumes instead of restarting.
+- **Restart:** loads the snapshot and only fetches the gap since it was written, from `RPC_URL`
+  (≈0.5 s). The archive is not touched unless the gap is over ~60,000 blocks (~7.5 h on testnet).
+- **Never trusted blindly:** a snapshot is used only if its chain id, contract and `KURIR_DEPLOY_BLOCK`
+  match, every event parses, and a stored block hash still matches the chain (this rejects a reset
+  local chain, which reuses chain id 97 and the same addresses). Otherwise it is ignored and rebuilt.
+- **Honest when unsure:** until the index has caught up to the chain head, `/guard` still uses the saved
+  history but adds `CHECKS_DEGRADED`. `GET /health` shows `synced`, `ageMs` and the snapshot state.
+- Delete `backend/.cache/` to force a full rebuild; `HISTORY_CACHE_DIR=off` disables saving.
+
+`scripts/history-snapshot-check.ts` probes it against testnet (set `ARCHIVE_RPC_URL`/`RPC_URL` to a dead
+port to simulate an outage).
+
 ## Cancelling a signed intent
 
 Call `KurirRelayer.invalidateNonce()` from the user's wallet. It burns the next nonce, so any intent
