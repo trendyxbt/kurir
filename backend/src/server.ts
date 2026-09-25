@@ -5,6 +5,7 @@ import { formatUnits, getAddress, isAddress } from "viem";
 import { account, chain, env, relayerFee, TOKEN_DECIMALS } from "./config.js";
 import { runGuard, type GuardResult } from "./guard.js";
 import { explainWarn, llmEnabled, startLlmWarmup } from "./llmExplain.js";
+import { historyStatus, startHistoryIndexer } from "./history.js";
 import { submitRelay, submitRelayWithPermit } from "./relay.js";
 
 // ---------- request schemas ----------
@@ -72,7 +73,7 @@ app.use(cors());
 app.use(express.json({ limit: "32kb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, history: historyStatus() });
 });
 
 /** Everything the frontend needs to build and sign a SendIntent. */
@@ -180,6 +181,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(env.PORT, () => {
   startLlmWarmup();
+  startHistoryIndexer();
   console.log(`Kurir backend on http://localhost:${env.PORT}`);
   console.log(`  relayer bot:   ${account.address}`);
   console.log(`  KurirRelayer:  ${env.KURIR_RELAYER_ADDRESS}`);

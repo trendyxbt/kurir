@@ -7,7 +7,8 @@
  */
 import { getAddress, type Address } from "viem";
 import { kurirRelayerAbi } from "./abi.js";
-import { env, largeSendThreshold, publicClient, scamList } from "./config.js";
+import { env, largeSendThreshold, primaryClient, publicClient, scamList, secondaryClient } from "./config.js";
+import { pastSends as indexedPastSends } from "./history.js";
 import { templateExplain } from "./llmExplain.js";
 
 export type Severity = "block" | "warn";
@@ -89,11 +90,15 @@ export async function runGuard(input: GuardInput): Promise<GuardResult> {
   const warns: Finding[] = [];
   let degraded = false;
 
-  const pastSends = await readPastSends(from).catch((err) => {
-    console.warn("[guard] getLogs failed, continuing with client history only:", shortErr(err));
-    degraded = true;
-    return [] as PastSend[];
-  });
+  // History comes from the in-memory index (instant). Only if its startup backfill hasn't
+  // finished yet do we fall back to querying logs on the request path.
+  const pastSends =
+    indexedPastSends(from) ??
+    (await readPastSends(from).catch((err) => {
+      console.warn("[guard] getLogs failed, continuing with client history only:", shortErr(err));
+      degraded = true;
+      return [] as PastSend[];
+    }));
 
   const known = new Set<Address>([
     ...(input.history ?? []).map((a) => getAddress(a)),
@@ -114,8 +119,8 @@ export async function runGuard(input: GuardInput): Promise<GuardResult> {
   if (!known.has(to)) {
     try {
       const [code, txCount] = await Promise.all([
-        publicClient.getCode({ address: to }),
-        publicClient.getTransactionCount({ address: to }),
+        hedged((c) => c.getCode({ address: to })),
+        hedged((c) => c.getTransactionCount({ address: to })),
       ]);
       const isContract = code !== undefined && code !== "0x";
 
@@ -148,6 +153,20 @@ export async function runGuard(input: GuardInput): Promise<GuardResult> {
   }
 
   return { verdict: warns.length > 0 ? "warn" : "ok", findings: warns };
+}
+
+/**
+ * Hedged read: ask the primary RPC, and if it hasn't answered within HEDGE_AFTER_MS ask the
+ * fallback too; first successful answer wins. Cuts the ~1-in-5 publicnode stall to ~0.4 s.
+ */
+const HEDGE_AFTER_MS = 400;
+async function hedged<T>(read: (c: typeof primaryClient) => Promise<T>): Promise<T> {
+  const first = read(primaryClient);
+  const second = new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => read(secondaryClient).then(resolve, reject), HEDGE_AFTER_MS);
+    first.then(() => clearTimeout(timer), () => {});
+  });
+  return Promise.any([first, second]);
 }
 
 async function readPastSends(from: Address): Promise<PastSend[]> {

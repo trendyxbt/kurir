@@ -7,6 +7,7 @@ import {
 } from "viem";
 import { kurirRelayerAbi } from "./abi.js";
 import { account, env, publicClient, walletClient } from "./config.js";
+import { recordReceiptLogs } from "./history.js";
 
 export interface SendIntent {
   token: Address;
@@ -67,6 +68,8 @@ async function submit(
     });
     const txHash = await walletClient.writeContract(request);
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 });
+    // Make this send part of the poisoning history immediately, without waiting for the indexer poll.
+    if (receipt.status === "success") recordReceiptLogs(receipt.logs);
     return {
       ok: true,
       txHash,

@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   createPublicClient,
   createWalletClient,
+  fallback,
   getAddress,
   http,
   isAddress,
@@ -23,6 +24,22 @@ const emptyToUndefined = (v: unknown) => (v === "" ? undefined : v);
 
 const EnvSchema = z.object({
   RPC_URL: z.string().url().default("https://bsc-testnet-rpc.publicnode.com"),
+  /** Second RPC for failover and hedged reads. Needn't support eth_getLogs (history uses RPC_URL). */
+  RPC_URL_FALLBACK: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().url().default("https://data-seed-prebsc-1-s1.bnbchain.org:8545"),
+  ),
+  /**
+   * RPC that still serves old logs, for the startup history backfill. publicnode prunes logs
+   * older than ~80k blocks (~10 h on testnet); onfinality keeps full history but caps ranges at 5k.
+   */
+  ARCHIVE_RPC_URL: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().url().default("https://bnb-testnet.api.onfinality.io/public"),
+  ),
+  ARCHIVE_CHUNK_BLOCKS: z.coerce.bigint().min(1n).default(5000n),
+  /** Per-request RPC timeout. Public testnet RPCs answer in 0.1-0.7 s but ~1 in 5 requests stalls. */
+  RPC_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
   RELAYER_PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/, "must be a 0x-prefixed 32-byte hex key"),
   KURIR_RELAYER_ADDRESS: address,
   TOKEN_ADDRESS: address,
@@ -74,5 +91,26 @@ export const scamList: Set<Address> = new Set(
 export const chain = bscTestnet;
 export const account = privateKeyToAccount(env.RELAYER_PRIVATE_KEY as Hex);
 
-export const publicClient = createPublicClient({ chain, transport: http(env.RPC_URL) });
-export const walletClient = createWalletClient({ account, chain, transport: http(env.RPC_URL) });
+// Fail fast and fail over: viem's defaults (10 s timeout, 3 retries) turned one stalled request
+// into a 20-30 s wait. A stuck request is abandoned after RPC_TIMEOUT_MS and sent to the fallback.
+const rpc = (url: string) => http(url, { timeout: env.RPC_TIMEOUT_MS, retryCount: 1, retryDelay: 100 });
+const transport = fallback([rpc(env.RPC_URL), rpc(env.RPC_URL_FALLBACK)], { retryCount: 1 });
+
+export const publicClient = createPublicClient({ chain, transport });
+export const walletClient = createWalletClient({ account, chain, transport });
+
+/** Single-endpoint clients for hedged reads (race both, first answer wins). */
+export const primaryClient = createPublicClient({ chain, transport: rpc(env.RPC_URL) });
+export const secondaryClient = createPublicClient({ chain, transport: rpc(env.RPC_URL_FALLBACK) });
+
+/** Old history for the startup backfill (see ARCHIVE_RPC_URL). */
+export const archiveClient = createPublicClient({
+  chain,
+  transport: http(env.ARCHIVE_RPC_URL, { timeout: 15_000, retryCount: 2, retryDelay: 500 }),
+});
+
+/** Recent history (eth_getLogs) on RPC_URL, used only by the background indexer's polling. */
+export const logsClient = createPublicClient({
+  chain,
+  transport: http(env.RPC_URL, { timeout: 10_000, retryCount: 3, retryDelay: 500 }),
+});
